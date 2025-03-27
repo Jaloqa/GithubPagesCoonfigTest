@@ -4,9 +4,9 @@ import cors from 'cors';
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Настройка CORS для вашего фронтенда на GitHub Pages
+// Настройка CORS
 app.use(cors({
-  origin: 'https://jaloqa.github.io/GithubPagesCoonfigTest',
+  origin: ['https://jaloqa.github.io/GithubPagesCoonfigTest', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));

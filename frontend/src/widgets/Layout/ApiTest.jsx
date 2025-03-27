@@ -4,6 +4,7 @@ const ApiTest = () => {
   const [response, setResponse] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [apiUrl, setApiUrl] = useState('https://github-pages-coonfig-test.vercel.app');
 
   const testConnection = async () => {
     setIsLoading(true);
@@ -11,20 +12,54 @@ const ApiTest = () => {
     setResponse('');
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://jaloqa-j26gkd75f-jaloqas-projects.vercel.app';
-      const res = await fetch(apiUrl);
+      console.log('Пытаемся подключиться к:', apiUrl);
+      const res = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+        },
+        mode: 'cors'
+      });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ошибка! Статус: ${res.status}`);
+      }
+      
       const data = await res.text();
       setResponse(data);
+      console.log('Ответ от сервера:', data);
     } catch (err) {
+      console.error('Ошибка подключения:', err);
       setError('Ошибка подключения к серверу: ' + err.message);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleApiUrlChange = (e) => {
+    setApiUrl(e.target.value);
+  };
+
   return (
     <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
       <h2>Проверка связи с сервером</h2>
+      
+      <div style={{ marginBottom: '15px' }}>
+        <label htmlFor="apiUrl" style={{ display: 'block', marginBottom: '5px' }}>URL API:</label>
+        <input 
+          id="apiUrl"
+          type="text" 
+          value={apiUrl} 
+          onChange={handleApiUrlChange} 
+          style={{ 
+            width: '100%', 
+            padding: '8px', 
+            borderRadius: '4px', 
+            border: '1px solid #ccc' 
+          }}
+        />
+      </div>
+      
       <button 
         onClick={testConnection}
         disabled={isLoading}
