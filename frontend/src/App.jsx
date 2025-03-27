@@ -1,20 +1,17 @@
-import { useState } from 'react'
-import './App.css'
+import { BrowserRouter as Router } from 'react-router-dom'
+import { AppRouter } from './app/providers/router/AppRouter'
+import { Layout } from './widgets/Layout/Layout'
+import React from 'react'
+import ApiTest from './widgets/Layout/ApiTest'
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div className="container">
-        <h1>Привет, мир!</h1>
-        <div className="card">
-          <button onClick={() => setCount((count) => count + 1)}>
-            Счетчик: {count}
-          </button>
-        </div>
-      </div>
-    </>
+    <Router basename="/GithubPagesCoonfigTest">
+      <Layout>
+        <AppRouter />
+        <ApiTest />
+      </Layout>
+    </Router>
   )
 }
 

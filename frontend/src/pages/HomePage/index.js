@@ -21,4 +21,6 @@ api.interceptors.response.use(
     // Handle errors here
     return Promise.reject(error)
   }
-) 
+)
+
+export { HomePage } from './HomePage'; 
