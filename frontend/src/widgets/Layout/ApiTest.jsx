@@ -11,7 +11,8 @@ const ApiTest = () => {
     setResponse('');
 
     try {
-      const res = await fetch('https://jaloqa-j26gkd75f-jaloqas-projects.vercel.app/');
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://jaloqa-j26gkd75f-jaloqas-projects.vercel.app';
+      const res = await fetch(apiUrl);
       const data = await res.text();
       setResponse(data);
     } catch (err) {
