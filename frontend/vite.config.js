@@ -5,7 +5,7 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/GithubPagesCoonfigTest/',
+  base: '/jaloqa.github.io/',
   server: {
     port: 3000,
     open: true
@@ -20,4 +20,4 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   }
-}) 
+})

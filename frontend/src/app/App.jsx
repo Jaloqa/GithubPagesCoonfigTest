@@ -6,7 +6,7 @@ import ApiTest from '../widgets/Layout/ApiTest'
 
 function App() {
   return (
-    <Router basename="/GithubPagesCoonfigTest">
+    <Router basename="/jaloqa.github.io">
       <Layout>
         <AppRouter />
         <ApiTest />
