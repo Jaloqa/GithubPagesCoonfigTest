@@ -4,11 +4,12 @@ import cors from 'cors';
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Настройка CORS
+// Настройка CORS - разрешаем запросы со всех доменов
 app.use(cors({
-  origin: ['https://jaloqa.github.io/GithubPagesCoonfigTest', 'http://localhost:3000'],
+  origin: '*',  // Разрешаем запросы с любого домена
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: false
 }));
 
 app.use(express.json());

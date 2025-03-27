@@ -13,12 +13,18 @@ const ApiTest = () => {
 
     try {
       console.log('Пытаемся подключиться к:', apiUrl);
+      
+      // Прямое использование fetch с полными настройками CORS
       const res = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Accept': 'application/json, text/plain, */*',
+          'Content-Type': 'application/json',
         },
-        mode: 'cors'
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'no-cache',
+        redirect: 'follow',
       });
       
       if (!res.ok) {
@@ -31,6 +37,23 @@ const ApiTest = () => {
     } catch (err) {
       console.error('Ошибка подключения:', err);
       setError('Ошибка подключения к серверу: ' + err.message);
+      
+      // Добавляем альтернативный метод для проверки
+      try {
+        // Можно попробовать использовать JSON-P для обхода CORS
+        console.log('Пробуем альтернативный метод подключения...');
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+        const proxyRes = await fetch(proxyUrl);
+        const proxyData = await proxyRes.json();
+        
+        if (proxyData && proxyData.contents) {
+          setResponse(proxyData.contents);
+          setError('');
+          console.log('Ответ от прокси-сервера:', proxyData.contents);
+        }
+      } catch (proxyErr) {
+        console.error('Ошибка альтернативного подключения:', proxyErr);
+      }
     } finally {
       setIsLoading(false);
     }

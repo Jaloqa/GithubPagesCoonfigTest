@@ -18,3 +18,10 @@ Thumbs.db
 .env.local
 .env.*.local
 .vercel
+.env.production
+.env.development
+.env.test
+.env.test.local
+.env.production.local
+.env.development.local
+
