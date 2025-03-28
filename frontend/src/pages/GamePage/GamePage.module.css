@@ -1,0 +1,745 @@
+.gamePage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: calc(100vh - 130px); /* Вычитаем высоту header и footer */
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: #1a1625;
+}
+
+.gameContainer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 30px;
+}
+
+.title {
+  font-size: 2rem;
+  color: white;
+  margin-bottom: 15px;
+}
+
+.gameControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.playerInfo {
+  color: #8a8196;
+  font-size: 1rem;
+}
+
+.startButton, .copyButton {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.startButton {
+  background-color: #9333ea;
+  color: white;
+  border: none;
+}
+
+.startButton:hover {
+  background-color: #a855f7;
+}
+
+.copyButton {
+  background-color: #3c3252;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.9rem;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.copyButton:hover {
+  background-color: #4b3f67;
+}
+
+.backButton {
+  background-color: #614b8f;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.9rem;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.backButton:hover {
+  background-color: #7559aa;
+}
+
+.errorActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  justify-content: center;
+}
+
+.homeButton {
+  background-color: #614b8f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.homeButton:hover {
+  background-color: #7559aa;
+}
+
+/* Улучшение отображения ошибок */
+.errorMessage {
+  background-color: rgba(220, 53, 69, 0.2);
+  color: #ff6b7a;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #dc3545;
+  margin-bottom: 20px;
+  text-align: center;
+  font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.retryButton {
+  background-color: #9333ea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background-color 0.2s;
+}
+
+.retryButton:hover {
+  background-color: #a855f7;
+}
+
+/* Улучшение стилей для индикатора загрузки */
+.loadingMessage {
+  background-color: rgba(25, 118, 210, 0.1);
+  color: #42a5f5;
+  padding: 25px;
+  border-radius: 8px;
+  border-left: 4px solid #1976d2;
+  margin-bottom: 20px;
+  text-align: center;
+  font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 4px solid rgba(25, 118, 210, 0.2);
+  border-top-color: #1976d2;
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lobbyInfo {
+  color: #8a8196;
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+.lobbyInfo strong {
+  color: white;
+  font-weight: 600;
+}
+
+/* Стили для игровой зоны */
+.gameArea {
+  background-color: #2d2640;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.gameContent h2 {
+  color: white;
+  margin-bottom: 10px;
+}
+
+.gameDescription {
+  color: #8a8196;
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+/* Сетка для видео */
+.videoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.videoAndControls {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 300px;
+  margin: 10px;
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.videoContainer {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 75%; /* 4:3 aspect ratio */
+  background-color: #111;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.videoWrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-color: #000;
+  transition: opacity 0.3s ease;
+}
+
+.videoLoading {
+  opacity: 0.7;
+}
+
+.playerLabel {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mediaControls {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+
+.mediaButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: rgba(0, 0, 0, 0.7);
+  font-size: 16px;
+}
+
+.mediaButtonActive {
+  background-color: rgba(0, 128, 0, 0.7);
+  color: white;
+}
+
+.mediaButtonActive:hover {
+  background-color: rgba(0, 150, 0, 0.8);
+}
+
+.mediaButtonDisabled {
+  background-color: rgba(160, 0, 0, 0.7);
+  color: white;
+}
+
+.mediaButtonDisabled:hover {
+  background-color: rgba(180, 0, 0, 0.8);
+}
+
+.streamError {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #ff5555;
+  padding: 10px;
+  border-radius: 5px;
+  max-width: 80%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 14px;
+}
+
+.streamErrorIcon {
+  font-size: 24px;
+  margin-bottom: 5px;
+}
+
+/* Добавляем анимацию для спиннера, пока идет загрузка видеопотока */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.videoLoading::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s linear infinite;
+  z-index: 1;
+}
+
+/* Стили для зеркального отображения своего видео */
+.videoMirrored {
+  transform: scaleX(-1);
+}
+
+.noVideo {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background-color: #222;
+  color: #aaa;
+  text-align: center;
+  font-size: 14px;
+}
+
+.noVideoIcon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+
+.characterInfo {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.characterLabel {
+  color: #9333ea;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.assignBadge {
+  background-color: #9333ea;
+  color: white;
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+.characterControls {
+  margin-top: 8px;
+}
+
+.characterEditForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.characterInput {
+  width: 100%;
+  background-color: #2d2640;
+  border: 1px solid #4b3f67;
+  border-radius: 4px;
+  color: white;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+}
+
+.characterInput:focus {
+  outline: none;
+  border-color: #9333ea;
+}
+
+.editButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.randomButton {
+  background-color: #3c3252;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.randomButton:hover {
+  background-color: #4b3f67;
+}
+
+.saveButton, .cancelButton, .editButton {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.saveButton {
+  background-color: #9333ea;
+  color: white;
+  border: none;
+}
+
+.saveButton:hover:not(:disabled) {
+  background-color: #a855f7;
+}
+
+.saveButton:disabled {
+  background-color: #616161;
+  cursor: not-allowed;
+}
+
+.cancelButton {
+  background-color: #3c3252;
+  color: white;
+  border: none;
+}
+
+.cancelButton:hover {
+  background-color: #4b3f67;
+}
+
+.editButton {
+  margin-top: 5px;
+  background-color: #3c3252;
+  color: white;
+  border: none;
+}
+
+.editButton:hover {
+  background-color: #4b3f67;
+}
+
+.characterDisplay {
+  display: flex;
+  flex-direction: column;
+}
+
+.characterName {
+  color: #9333ea;
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+
+/* Основной макет игры */
+.mainGameLayout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+/* Боковая панель */
+.sidePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Секция для заметок */
+.notesSection {
+  background-color: #3c3252;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.notesSection h3 {
+  color: white;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.notesArea {
+  width: 100%;
+  height: 200px;
+  background-color: #2d2640;
+  border: 1px solid #4b3f67;
+  border-radius: 6px;
+  color: white;
+  padding: 10px;
+  resize: none;
+  font-size: 0.9rem;
+}
+
+.notesArea:focus {
+  outline: none;
+  border-color: #9333ea;
+}
+
+/* Секция с подсказками */
+.hintsSection {
+  background-color: #3c3252;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.hintsSection h3 {
+  color: white;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.hintsList {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.hintItem {
+  color: #8a8196;
+  font-size: 0.9rem;
+  padding: 6px 0;
+  border-bottom: 1px solid #4b3f67;
+}
+
+.hintItem:last-child {
+  border-bottom: none;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .mainGameLayout {
+    grid-template-columns: 1fr;
+  }
+  
+  .videoGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  
+  .title {
+    font-size: 1.5rem;
+  }
+  
+  .gameControls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.noPlayersMessage {
+  width: 100%;
+  text-align: center;
+  padding: 40px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.noPlayersMessage p {
+  margin: 10px 0;
+}
+
+/* Стили для контролов медиа */
+.mediaControls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.mediaButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.mediaButtonActive {
+  background-color: #614b8f;
+  color: white;
+}
+
+.mediaButtonDisabled {
+  background-color: #b23939;
+  color: white;
+}
+
+.mediaButton:hover {
+  transform: scale(1.1);
+}
+
+.cameraOffOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.cameraOffIcon {
+  font-size: 2rem;
+  color: #b23939;
+  opacity: 0.8;
+}
+
+/* Стили для лобби */
+.lobby {
+  background-color: #2d2640;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.lobby h2 {
+  color: white;
+  margin-bottom: 15px;
+}
+
+.streamError {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  background-color: rgba(220, 53, 69, 0.8);
+  color: white;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  z-index: 15;
+}
+
+.streamErrorIcon {
+  font-size: 16px;
+}
+
+.streamErrorText {
+  flex: 1;
+  text-align: center;
+}
+
+.altButton {
+  background-color: #3c3252;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.altButton:hover {
+  background-color: #4b3f67;
+}
+
+.videoPlaceholder {
+  width: 100%;
+  height: 100%;
+  background-color: #2c3e50;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #ffffff;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+.videoPlaceholder span {
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+} 

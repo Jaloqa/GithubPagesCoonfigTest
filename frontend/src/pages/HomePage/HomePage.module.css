@@ -1,20 +1,153 @@
 .homePage {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 130px); /* Вычитаем высоту header и footer */
+  background-color: #1a1625; /* Темный фон */
+  width: 100%;
+  box-sizing: border-box;
+  padding: 20px;
 }
 
-.homePage h1 {
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 450px;
+}
+
+.title {
   font-size: 2.5rem;
-  margin-bottom: 1rem;
-  color: #0077b6;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 10px;
+  text-align: center;
 }
 
-.homePage p {
-  font-size: 1.2rem;
-  line-height: 1.5;
-  color: #333;
-  margin-bottom: 2rem;
+.subtitle {
+  font-size: 1rem;
+  color: #ffffff99;
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.connectionStatus {
+  background-color: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  text-align: center;
+  font-size: 0.9rem;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.errorMessage {
+  background-color: rgba(220, 53, 69, 0.2);
+  color: #ff6b7a;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.formGroup {
+  width: 100%;
+  margin-bottom: 15px;
+}
+
+/* Специальный отступ для поля ввода имени */
+.nameInput {
+  margin-bottom: 30px;
+}
+
+.input {
+  width: 100%;
+  height: 50px;
+  background-color: #2d2640;
+  border: none;
+  border-radius: 8px;
+  padding: 0 15px;
+  font-size: 1rem;
+  color: white;
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: #8a8196;
+}
+
+.input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #9333ea;
+}
+
+.createButton {
+  width: 100%;
+  height: 50px;
+  background-color: #9333ea;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.createButton:hover {
+  background-color: #a855f7;
+}
+
+.joinButton {
+  width: 100%;
+  height: 50px;
+  background-color: #3c3252;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.joinButton:hover {
+  background-color: #4b3f67;
+}
+
+.divider {
+  width: 100%;
+  text-align: center;
+  color: #8a8196;
+  margin: 20px 0 30px;
+  position: relative;
+  overflow: hidden;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background-color: #31283e;
+}
+
+.divider::before {
+  left: 0;
+}
+
+.divider::after {
+  right: 0;
 }
 
 .sections {
@@ -40,7 +173,7 @@
     padding: 1rem;
   }
   
-  .homePage h1 {
+  .title {
     font-size: 2rem;
   }
 } 
