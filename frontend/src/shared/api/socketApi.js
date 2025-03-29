@@ -54,7 +54,14 @@ class SocketApi {
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        autoConnect: true
+        autoConnect: true,
+        path: '/socket.io/',
+        forceNew: true,
+        multiplex: false,
+        upgrade: true,
+        rememberUpgrade: true,
+        secure: false,
+        rejectUnauthorized: false
       });
       
       // Обработка событий соединения
@@ -100,6 +107,25 @@ class SocketApi {
       // Обработка обновлений комнаты
       this.socket.on('room-updated', (data) => {
         console.log('Получено обновление комнаты:', data);
+      });
+      
+      // Обработка запросов видео соединения
+      this.socket.on('player-joined-video', ({ roomId, playerId }) => {
+        console.log('Получен запрос на видео соединение от:', playerId, 'для комнаты:', roomId);
+        // Эмитим событие присоединения для нашего videoApi
+        this.socket.emit('player-joined', playerId);
+      });
+      
+      // Обработка сигналов WebRTC
+      this.socket.on('signal', ({ from, signal }) => {
+        console.log('Получен WebRTC сигнал от:', from);
+        this.trigger('signal', { from, signal });
+      });
+      
+      // Получение списка всех игроков в комнате
+      this.socket.on('all-players', (players) => {
+        console.log('Получен список всех игроков в комнате:', players);
+        this.trigger('all-players', players);
       });
       
       // Обработка WebRTC сигналов
@@ -356,6 +382,17 @@ class SocketApi {
     this.socket.emit('leave-room', { roomCode });
   }
 
+  // Получение списка игроков в комнате
+  getPlayers(roomCode) {
+    if (!this.connected || !this.socket) {
+      console.warn('Попытка получить список игроков, но соединение не установлено');
+      return false;
+    }
+    
+    this.socket.emit('get-players', { roomCode });
+    return true;
+  }
+
   // Добавляем базовую функцию для отправки сообщений на сервер
   emit(eventName, data) {
     if (!this.connected || !this.socket) {
@@ -365,6 +402,20 @@ class SocketApi {
     
     this.socket.emit(eventName, data);
     return true;
+  }
+
+  // Метод для вызова обработчиков событий
+  trigger(event, data) {
+    if (!this.listeners.has(event)) return;
+    
+    const callbacks = this.listeners.get(event) || [];
+    callbacks.forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error(`Ошибка в обработчике события ${event}:`, error);
+      }
+    });
   }
 
   // Методы для WebRTC

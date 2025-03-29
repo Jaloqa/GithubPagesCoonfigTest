@@ -8,7 +8,16 @@ export default defineConfig({
   base: '/GithubPagesCoonfigTest/',
   server: {
     port: 3000,
-    open: true
+    open: true,
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 3000,
+      clientPort: 3000
+    },
+    watch: {
+      usePolling: true
+    }
   },
   resolve: {
     extensions: ['.js', '.jsx', '.json'],
@@ -19,5 +28,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+  },
+  define: {
+    // Полифиллы для Node.js API, необходимые для simple-peer
+    global: 'window',
+    'process.env': '{}',
+    'process.browser': 'true'
   }
 }) 

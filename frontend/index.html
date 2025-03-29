@@ -1,10 +1,48 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jaloqa Project</title>
+    <!-- Добавляем полифиллы до загрузки приложения -->
+    <script>
+      // Global polyfill
+      window.global = window;
+      
+      // Process polyfill
+      window.process = { 
+        env: {}, 
+        browser: true,
+        nextTick: function(cb) { setTimeout(cb, 0); }
+      };
+      
+      // Buffer polyfill
+      window.Buffer = {
+        from: function(data, encoding) { 
+          if (Array.isArray(data) || data instanceof Uint8Array) {
+            return new Uint8Array(data);
+          }
+          if (typeof data === 'string') {
+            const encoder = new TextEncoder();
+            return encoder.encode(data);
+          }
+          return new Uint8Array();
+        },
+        alloc: function(size) { return new Uint8Array(size); },
+        allocUnsafe: function(size) { return new Uint8Array(size); },
+        isBuffer: function() { return false; }
+      };
+      
+      // Crypto polyfill
+      window.crypto = window.crypto || {};
+      window.crypto.getRandomValues = window.crypto.getRandomValues || function(arr) {
+        for (let i = 0; i < arr.length; i++) {
+          arr[i] = Math.floor(Math.random() * 256);
+        }
+        return arr;
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>

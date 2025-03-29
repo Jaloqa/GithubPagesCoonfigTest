@@ -2,26 +2,33 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styles from './GamePage.module.css';
 import socketApi from '@/shared/api/socketApi';
+import videoApi from '@/shared/api/videoApi';
 import PlayerVideo from './PlayerVideo';
 
 export const GamePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const videoRefs = useRef({});
+  const [error, setError] = useState('');
+  const [serverStatus, setServerStatus] = useState('connecting'); // 'connecting', 'connected', 'error'
   const [notes, setNotes] = useState('');
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [newCharacter, setNewCharacter] = useState('');
-  const [error, setError] = useState('');
-  const [serverStatus, setServerStatus] = useState('connecting'); // 'connecting', 'connected', 'error'
+  const [videoEnabled, setVideoEnabled] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const localVideoRef = useRef(null);
+  const [remoteStreams, setRemoteStreams] = useState({});
+
   const [gameState, setGameState] = useState({
     roomCode: '',
     players: [],
     isHost: false,
     playerName: '',
     gameStarted: false,
-    currentCharacter: '',
+    playerId: '',
     // Карта кто кому загадывает слова (playerId -> assignedToPlayerId)
-    characterAssignments: {}
+    characterAssignments: {},
+    // Персонажи, присвоенные игрокам
+    characters: {}
   });
 
   // Подсказки для наводящих вопросов
@@ -65,970 +72,431 @@ export const GamePage = () => {
     }
   };
 
-  // Эффект для проверки статуса сервера при загрузке компонента
+  // Получение параметров из URL
   useEffect(() => {
-    console.log('Запуск проверки статуса сервера');
-    let mounted = true;
-    let connectionTimeout = null;
-    
-    const checkConnection = async () => {
-      if (!mounted) return;
-      
-      setServerStatus('connecting');
-      setError('');
-      
-      try {
-        // Инициализируем сокет
-        const socket = socketApi.init();
-        
-        if (!mounted) return;
-        
-        // Логируем текущее состояние сокета
-        console.log('Текущее состояние сокета:', socketApi.getSocketStateString());
-        
-        // Обработчики событий
-        const handleConnect = () => {
-          if (!mounted) return;
-          console.log('Соединение с сервером установлено');
-          console.log('Новое состояние сокета:', socketApi.getSocketStateString());
-          setServerStatus('connected');
-          setError('');
-        };
-        
-        const handleConnectError = (err) => {
-          if (!mounted) return;
-          console.error('Ошибка подключения к серверу:', err);
-          console.log('Состояние сокета при ошибке:', socketApi.getSocketStateString());
-          setServerStatus('error');
-          setError('Ошибка подключения к серверу. Убедитесь, что сервер запущен и обновите страницу.');
-        };
-        
-        // Устанавливаем таймаут для подключения
-        connectionTimeout = setTimeout(() => {
-          if (!mounted) return;
-          console.error('Таймаут подключения к серверу');
-          console.log('Состояние сокета при таймауте:', socketApi.getSocketStateString());
-          setServerStatus('error');
-          setError('Не удалось подключиться к серверу. Убедитесь, что сервер запущен и обновите страницу.');
-        }, 8000); // 8 секунд на подключение
-        
-        // Проверяем текущее состояние соединения
-        if (socket.connected) {
-          console.log('Сокет уже подключен');
-          clearTimeout(connectionTimeout);
-          handleConnect();
-        } else {
-          // Добавляем обработчики событий
-          socket.once('connect', () => {
-            clearTimeout(connectionTimeout);
-            handleConnect();
-          });
-          
-          socket.once('connect_error', (error) => {
-            clearTimeout(connectionTimeout);
-            handleConnectError(error);
-          });
-        }
-      } catch (err) {
-        if (!mounted) return;
-        console.error('Ошибка при инициализации сокета:', err);
-        setServerStatus('error');
-        setError('Ошибка при инициализации сокета. Убедитесь, что сервер запущен и обновите страницу.');
-      }
-    };
-    
-    // Запускаем проверку соединения
-    checkConnection();
-    
-    // Функция очистки при размонтировании
-    return () => {
-      mounted = false;
-      if (connectionTimeout) {
-        clearTimeout(connectionTimeout);
-      }
-    };
-  }, []);
-  
-  // Функция для повторной попытки подключения
-  const retryConnection = useCallback(() => {
-    console.log('Попытка повторного подключения к серверу...');
-    
-    // Закрываем существующее соединение
-    socketApi.disconnect();
-    
-    // Устанавливаем состояние
-    setServerStatus('connecting');
-    setError('');
-    
-    // Пытаемся подключиться снова
-    const socket = socketApi.init();
-    
-    // Обработчики для нового соединения
-    const handleConnect = () => {
-      console.log('Повторное соединение установлено');
-      setServerStatus('connected');
-      setError('');
-    };
-    
-    const handleConnectError = (err) => {
-      console.error('Ошибка повторного подключения:', err);
-      setServerStatus('error');
-      setError('Ошибка повторного подключения. Убедитесь, что сервер запущен и попробуйте еще раз.');
-    };
-    
-    // Устанавливаем таймаут
-    const retryTimeout = setTimeout(() => {
-      setServerStatus('error');
-      setError('Время ожидания повторного подключения истекло. Попробуйте еще раз или вернитесь на главную страницу.');
-    }, 10000);
-    
-    // Добавляем обработчики
-    socket.once('connect', () => {
-      clearTimeout(retryTimeout);
-      handleConnect();
-    });
-    
-    socket.once('connect_error', (error) => {
-      clearTimeout(retryTimeout);
-      handleConnectError(error);
-    });
-    
-  }, []);
-
-  // Примеры персонажей
-  const characterExamples = [
-    "Гарри Поттер", "Дарт Вейдер", "Мэрилин Монро", "Альберт Эйнштейн",
-    "Винни Пух", "Бэтмен", "Чебурашка", "Эрнесто Че Гевара",
-    "Джокер", "Микки Маус", "Наполеон", "Клеопатра"
-  ];
-
-  useEffect(() => {
-    // Если сервер не подключен, не пытаемся подключаться к комнате
-    if (serverStatus !== 'connected') {
-      console.log('Сервер не подключен, пропускаем подключение к комнате');
-      return;
-    }
-    
-    console.log('Сервер подключен, подключаемся к комнате');
-    
-    // Инициализация сокета
-    socketApi.init();
-
-    // Получаем данные из URL параметров или localStorage
     const params = new URLSearchParams(location.search);
-    const name = params.get('name') || localStorage.getItem('playerName');
-    const room = params.get('room') || localStorage.getItem('roomCode');
-    const isHost = params.get('host') === 'true' || localStorage.getItem('isHost') === 'true';
+    const name = params.get('name');
+    const room = params.get('room');
+    const isHost = params.get('host') === 'true';
 
     if (!name || !room) {
-      // Если имя или код комнаты не указаны, возвращаемся на главную
       navigate('/');
       return;
     }
 
-    // Сохраняем данные в localStorage
-    localStorage.setItem('playerName', name);
-    localStorage.setItem('roomCode', room);
-    localStorage.setItem('isHost', isHost);
-
-    // Обновляем состояние
     setGameState(prev => ({
       ...prev,
       playerName: name,
       roomCode: room,
-      isHost: isHost,
-      players: []
+      isHost: isHost
     }));
+  }, [location.search, navigate]);
 
-    // Настраиваем обработчики событий WebSocket
-    socketApi.on('room-updated', (data) => {
-      console.log('Комната обновлена:', data);
+  // Инициализация сокета и обработчиков событий
+  useEffect(() => {
+    if (!gameState.roomCode || !gameState.playerName) return;
+    
+    console.log('Инициализация соединения с комнатой:', gameState.roomCode);
+    setServerStatus('connecting');
+    
+    // Инициализируем соединение
+    const socket = socketApi.init();
+    
+    // Обработчики событий
+    const handleRoomUpdated = (data) => {
+      console.log('Получено обновление комнаты:', data);
+      
+      // Удаляем дубликаты игроков по ID
+      const uniquePlayers = data.players.filter(
+        (player, index, self) => index === self.findIndex(p => p.id === player.id)
+      );
+      
+      // Обновляем состояние игры
       setGameState(prev => ({
         ...prev,
-        players: data.players,
-        gameStarted: data.gameStarted
+        players: uniquePlayers,
+        gameStarted: data.gameStarted || prev.gameStarted,
+        // Сохраняем другие данные из обновления
+        characterAssignments: data.characterAssignments || prev.characterAssignments,
+        characters: data.characters || prev.characters
       }));
-    });
-
-    socketApi.on('game-started', (data) => {
+    };
+    
+    const handleGameStarted = (data) => {
       console.log('Игра началась:', data);
       setGameState(prev => ({
         ...prev,
         gameStarted: true,
         characterAssignments: data.characterAssignments
       }));
-    });
-
-    // Добавляем обработчики WebRTC событий
-    const handlePlayerJoined = (data) => {
-      console.log('Новый игрок присоединился:', data);
     };
-
-    const handlePlayerLeft = (data) => {
-      console.log('Игрок покинул комнату:', data);
+    
+    const handleCharacterAssigned = (data) => {
+      console.log('Получен персонаж:', data);
+      setGameState(prev => ({
+        ...prev,
+        characters: {
+          ...prev.characters,
+          [socketApi.getSocketId()]: data.character
+        }
+      }));
     };
-
-    socketApi.onPlayerJoined(handlePlayerJoined);
-    socketApi.onPlayerLeft(handlePlayerLeft);
-
-    // Подключаемся к комнате если мы еще не хост
-    if (!isHost) {
-      console.log('Присоединение к комнате:', room, name);
-      socketApi.joinRoom(room, name);
-    } else {
-      // Если мы хост, нам нужно отправить запрос на получение обновлений комнаты
-      console.log('Запрос обновления комнаты для хоста:', room);
-      socketApi.emit('get-room-info', { roomCode: room });
-    }
-
-    // Очистка при размонтировании
-    return () => {
-      socketApi.off('room-updated');
-      socketApi.off('game-started');
-      socketApi.off('player-joined', handlePlayerJoined);
-      socketApi.off('player-left', handlePlayerLeft);
+    
+    const handleConnect = () => {
+      console.log('Соединение установлено');
+      setServerStatus('connected');
+      setError('');
       
-      // Выход из комнаты только если пользователь действительно покидает страницу
-      if (gameState.roomCode && !window.location.href.includes(gameState.roomCode)) {
-        console.log('Покидаем комнату:', gameState.roomCode);
-        socketApi.leaveRoom(gameState.roomCode);
+      // Присоединяемся к комнате или создаем новую
+      if (gameState.isHost) {
+        socketApi.createRoom(gameState.playerName);
+      } else {
+        socketApi.joinRoom(gameState.roomCode, gameState.playerName);
       }
     };
-  }, [location, navigate, gameState.roomCode, serverStatus]);
-
-  // Эффект для инициализации камеры и mediasoup при загрузке компонента
-  useEffect(() => {
-    let mounted = true;
-    let initTimer = null;
-    let mediasoupInitialized = false;
-
-    const initializeMedia = async () => {
-      // Функция заглушка для совместимости
-      console.log('Инициализация видео отключена');
-      return;
-    };
-
-    // Настройка обработчиков для входящих медиа-потоков
-    const setupMediaHandlers = () => {
-      // Функция заглушка для совместимости
-      console.log('Настройка видео отключена');
-      return;
-    };
-
-    // Не запускаем инициализацию сразу, даем время на рендеринг компонентов
-    if (serverStatus === 'connected' && gameState.roomCode && !mediasoupInitialized) {
-      initTimer = setTimeout(() => {
-        initializeMedia();
-      }, 1000);
+    
+    // Устанавливаем обработчики
+    socketApi.on('room-updated', handleRoomUpdated);
+    socketApi.on('game-started', handleGameStarted);
+    socketApi.on('character-assigned', handleCharacterAssigned);
+    socketApi.on('connect', handleConnect);
+    
+    // Если уже подключены, присоединяемся к комнате
+    if (socketApi.isConnected()) {
+      handleConnect();
     }
-
-    return () => {
-      mounted = false;
-      if (initTimer) {
-        clearTimeout(initTimer);
-      }
-      
-      // НЕ очищаем ресурсы mediasoup при размонтировании этого эффекта
-      // Очистка будет производиться только при выходе из компонента или комнаты
-    };
-  }, [gameState.roomCode, serverStatus]);
-
-  // Добавляем отдельный эффект для очистки ресурсов при размонтировании компонента
-  useEffect(() => {
-    return () => {
-      // Очищаем ресурсы mediasoup только при полном размонтировании компонента
-      if (mediasoupApi.initialized) {
-        console.log('Очистка ресурсов mediasoup при размонтировании компонента');
-        mediasoupApi.cleanup();
-      }
-    };
-  }, []);
-
-  // Эффект для обновления видео после получения потока - оптимизируем
-  useEffect(() => {
-    if (!mediasoupApi.initialized) return;
-    
-    const myId = socketApi.getSocketId();
-    console.log('Обновление локального видео для:', myId);
-    
-    // Используем единый таймаут для всех попыток
-    let timeoutId = null;
-    
-    // Функция для обновления видео с повторными попытками
-    const updateVideoWithRetries = () => {
-      // Функция заглушка для совместимости
-      return;
-    };
-    
-    // Запускаем первую попытку
-    updateVideoWithRetries();
     
     // Очистка при размонтировании
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+      socketApi.off('room-updated', handleRoomUpdated);
+      socketApi.off('game-started', handleGameStarted);
+      socketApi.off('character-assigned', handleCharacterAssigned);
+      socketApi.off('connect', handleConnect);
+    };
+  }, [gameState.roomCode, gameState.playerName, gameState.isHost]);
+
+  // Инициализация видео
+  useEffect(() => {
+    if (!gameState.roomCode || !gameState.playerName || serverStatus !== 'connected') return;
+    
+    console.log('Инициализация видео для комнаты:', gameState.roomCode);
+    
+    // Callback для обработки входящего потока
+    const handleRemoteStream = (playerId, stream) => {
+      console.log('Получен удаленный поток от:', playerId, 
+        stream ? `Видеотреков: ${stream.getVideoTracks().length}, Аудиотреков: ${stream.getAudioTracks().length}` : 'Нет потока');
+      
+      if (stream) {
+        // Проверяем, есть ли в потоке треки или это canvas-поток
+        if (stream.getTracks().length > 0 || stream.isCanvasStream) {
+          setRemoteStreams(prev => ({
+            ...prev,
+            [playerId]: stream
+          }));
+        } else {
+          console.warn(`Поток от ${playerId} не содержит треков и не является canvas-потоком, игнорируем`);
+        }
       }
     };
-  }, [mediasoupApi.initialized]);
-
-  // Эффект для отображения видео после обновления списка игроков или изменения статуса игры
-  useEffect(() => {
-    if (!mediasoupApi.initialized) return;
     
-    const myId = socketApi.getSocketId();
-    
-    console.log('Обновление видео после изменения списка игроков или статуса игры:', {
-      myId, 
-      playersCount: gameState.players.length,
-      gameStarted: gameState.gameStarted,
-      refs: Object.keys(videoRefs.current),
-      localStreamActive: !!mediasoupApi.initialized,
-      cameraEnabled
-    });
-    
-    // Устанавливаем флаг для предотвращения проблем с обновлением при размонтировании
-    let mounted = true;
-    
-    // Не сбрасываем потоки сразу для всех элементов, чтобы избежать мерцания
-    // Вместо этого будем обновлять только те элементы, которые этого требуют
-    
-    const timer = setTimeout(() => {
-      if (!mounted) return;
-      
-      // Проверяем и обновляем свой собственный видеоэлемент
-      const updateMyVideo = () => {
-        // Сначала пытаемся найти через DOM
-        const videoElement = document.querySelector(`video[data-player-id="${myId}"]`);
-        if (videoElement) {
-          if (!videoElement.srcObject || videoElement.srcObject !== mediasoupApi.getLocalStream()) {
-            console.log('Найден видеоэлемент через DOM, устанавливаем поток');
-            videoElement.srcObject = mediasoupApi.getLocalStream();
-          }
-        } 
-        // Если не нашли через DOM, пробуем через refs
-        else if (videoRefs.current[myId]) {
-          if (!videoRefs.current[myId].srcObject || videoRefs.current[myId].srcObject !== mediasoupApi.getLocalStream()) {
-            console.log('Найден видеоэлемент через refs, устанавливаем поток');
-            videoRefs.current[myId].srcObject = mediasoupApi.getLocalStream();
-          }
-        } 
-        // Если все еще не нашли, попробуем позже
-        else {
-          console.log('Видеоэлемент не найден, запланируем еще одну попытку');
-          // Пробуем еще раз через небольшую задержку
-          setTimeout(() => {
-            if (!mounted) return;
-            
-            const delayedVideoElement = document.querySelector(`video[data-player-id="${myId}"]`);
-            if (delayedVideoElement) {
-              if (!delayedVideoElement.srcObject || delayedVideoElement.srcObject !== mediasoupApi.getLocalStream()) {
-                console.log('Найден видеоэлемент после дополнительной задержки, устанавливаем поток');
-                delayedVideoElement.srcObject = mediasoupApi.getLocalStream();
-              }
-            }
-          }, 1000);
-        }
-      };
-      
-      // Запускаем обновление своего видео
-      updateMyVideo();
-      
-    }, 500); // Уменьшена задержка для более быстрого обновления
-    
-    return () => {
-      mounted = false;
-      clearTimeout(timer);
+    // Callback для удаления потока
+    const handleRemoteStreamRemoved = (playerId) => {
+      console.log('Удален удаленный поток от:', playerId);
+      setRemoteStreams(prev => {
+        const newStreams = { ...prev };
+        delete newStreams[playerId];
+        return newStreams;
+      });
     };
-  }, [mediasoupApi.initialized]);
-
-  // Эффект для подключения к медиа-потокам других игроков при изменении списка игроков
-  useEffect(() => {
-    if (!gameState.roomCode || serverStatus !== 'connected') {
-      return;
-    }
-
-    // Устанавливаем флаг для предотвращения проблем при размонтировании
-    let mounted = true;
-    let connectionTimer = null;
-    let reconnectTimeoutId = null;
-
-    // Проверяем mediasoup через интервал
-    const checkMediasoupConnections = () => {
-      reconnectTimeoutId = setTimeout(async () => {
-        if (!mounted) return;
+    
+    // Функция для устранения проблем с разрешениями доступа
+    const initVideoWithRetry = async (attempt = 1) => {
+      try {
+        console.log(`Попытка инициализации видео ${attempt}/3`);
+        const localStream = await videoApi.init(gameState.roomCode, handleRemoteStream, handleRemoteStreamRemoved);
         
-        try {
-          // Проверяем, инициализирован ли mediasoup
-          if (mediasoupApi.initialized && mediasoupApi.getLocalStream()) {
-            // Проверяем и восстанавливаем соединения, если необходимо
-            const reconnected = await mediasoupApi.reconnectIfNeeded();
-            if (reconnected) {
-              console.log('WebRTC соединения проверены и восстановлены');
-              
-              // После успешного переподключения, пробуем подключиться к потокам других игроков
-              if (mounted) {
-                connectToPlayerStreams();
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Ошибка при проверке медиа соединений:', err);
+        console.log('Локальный поток инициализирован:', 
+          localStream ? `Видеотреков: ${localStream.getVideoTracks().length}, Аудиотреков: ${localStream.getAudioTracks().length}` : 'Нет потока');
+        
+        // Устанавливаем локальный поток в видео элемент
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStream;
         }
         
-        // Запускаем следующую проверку
-        if (mounted) {
-          checkMediasoupConnections();
+        // Сохраняем ID сокета для идентификации локального игрока
+        const socketId = socketApi.getSocketId();
+        if (socketId) {
+          setGameState(prev => ({
+            ...prev,
+            playerId: socketId
+          }));
         }
-      }, 15000); // Проверяем каждые 15 секунд
-    };
-
-    // Функция для получения потоков других игроков
-    const connectToPlayerStreams = async () => {
-      // Функция заглушка для совместимости
-      console.log('Подключение к потокам игроков отключено');
-      return;
-    };
-    
-    // Запускаем первую проверку медиасоединений
-    checkMediasoupConnections();
-    
-    // Выполняем подключение к потокам с небольшой задержкой
-    connectionTimer = setTimeout(() => {
-      if (mounted) {
-        connectToPlayerStreams();
+        
+        // Обновляем статус видео и аудио на основе реального состояния
+        setVideoEnabled(videoApi.isVideoEnabled());
+        setAudioEnabled(videoApi.isAudioEnabled());
+        
+        return true;
+      } catch (error) {
+        console.error(`Ошибка при инициализации видео (попытка ${attempt}/3):`, error);
+        
+        if (attempt < 3) {
+          console.log(`Повторная попытка через 1 секунду...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return initVideoWithRetry(attempt + 1);
+        }
+        
+        // Все попытки не удались
+        setError(getMediaErrorMessage(error));
+        setVideoEnabled(false);
+        setAudioEnabled(false);
+        
+        // Всё равно устанавливаем ID игрока
+        const socketId = socketApi.getSocketId();
+        if (socketId) {
+          setGameState(prev => ({
+            ...prev,
+            playerId: socketId
+          }));
+        }
+        
+        return false;
       }
-    }, 2000);
+    };
     
+    // Запускаем инициализацию с возможностью повторной попытки
+    initVideoWithRetry();
+    
+    // Очистка при размонтировании
     return () => {
-      mounted = false;
-      if (connectionTimer) {
-        clearTimeout(connectionTimer);
-      }
-      if (reconnectTimeoutId) {
-        clearTimeout(reconnectTimeoutId);
-      }
+      videoApi.stop();
     };
-  }, [gameState.roomCode, gameState.players, serverStatus]);
+  }, [gameState.roomCode, gameState.playerName, serverStatus]);
 
-  const startGame = () => {
-    // Отправляем запрос на начало игры на сервер
-    if (!gameState.roomCode) return;
-    console.log('Отправка запроса на начало игры:', gameState.roomCode);
+  // Обработчик для начала игры
+  const handleStartGame = () => {
+    if (!gameState.isHost) return;
     socketApi.startGame(gameState.roomCode);
   };
 
-  // Функция для отображения видео
-  const getVideoRef = (playerId) => (element) => {
-    // Функция заглушка для совместимости
+  // Обработчик для назначения персонажа
+  const handleAssignCharacter = (targetPlayerId) => {
+    if (!newCharacter.trim()) {
+      setError('Введите имя персонажа');
     return;
-  };
-
-  // Функция для копирования кода комнаты
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(gameState.roomCode);
-    alert(`Код комнаты ${gameState.roomCode} скопирован в буфер обмена`);
-  };
-
-  // Включение/выключение камеры
-  const toggleCamera = async () => {
-    // Функция заглушка для совместимости
-    console.log('Камера отключена в этой версии приложения');
-    return;
-  };
-
-  // Включение/выключение микрофона
-  const toggleMicrophone = async () => {
-    // Функция заглушка для совместимости
-    console.log('Микрофон отключен в этой версии приложения');
-    return;
-  };
-
-  // Обработчик изменения заметок
-  const handleNotesChange = (e) => {
-    setNotes(e.target.value);
-  };
-
-  // Начать редактирование персонажа
-  const startEditingCharacter = (targetPlayerId) => {
-    setEditingCharacter(targetPlayerId);
+    }
     
-    // Находим текущего персонажа, если он уже был установлен
-    const targetPlayer = gameState.players.find(p => p.id === targetPlayerId);
-    setNewCharacter(targetPlayer.character || '');
-  };
-
-  // Сохранить изменения персонажа
-  const saveCharacter = () => {
-    if (!editingCharacter || !newCharacter.trim()) return;
+    socketApi.emit('assign-character', {
+      roomCode: gameState.roomCode,
+      targetPlayerId,
+      character: newCharacter
+    });
     
-    // Отправляем изменения на сервер
-    socketApi.setCharacter(gameState.roomCode, editingCharacter, newCharacter.trim());
-    
-    setEditingCharacter(null);
     setNewCharacter('');
-  };
-
-  // Отменить редактирование
-  const cancelEditing = () => {
     setEditingCharacter(null);
-    setNewCharacter('');
   };
 
-  // Получить случайного персонажа
-  const getRandomCharacter = () => {
-    const randomIndex = Math.floor(Math.random() * characterExamples.length);
-    setNewCharacter(characterExamples[randomIndex]);
+  // Обработчики для включения/отключения видео и аудио
+  const toggleVideo = () => {
+    const newState = !videoEnabled;
+    videoApi.toggleVideo(newState);
+    setVideoEnabled(newState);
   };
 
-  // Определить, кому текущий игрок загадывает персонажа
-  const whoAmIAssigning = () => {
-    const myId = socketApi.getSocketId();
-    if (!myId) return null;
-    return gameState.characterAssignments[myId] || null;
+  const toggleAudio = () => {
+    const newState = !audioEnabled;
+    videoApi.toggleAudio(newState);
+    setAudioEnabled(newState);
   };
 
-  // Поиск своего индекса в массиве игроков
-  const findMyIndex = () => {
-    const myId = socketApi.getSocketId();
-    if (!myId) return -1;
-    return gameState.players.findIndex(player => player.id === myId);
-  };
-
-  // Компонент для отображения видео игрока
-  const PlayerCharacterInfo = ({ player }) => {
-    const isMe = player.id === socketApi.getSocketId();
-    const isMyAssignment = whoAmIAssigning() === player.id;
-    
-    return (
-      <div className={styles.characterInfo}>
-        <div className={styles.playerLabel}>
-          {player.name}
-          {isMe && <span className={styles.meBadge}>Вы</span>}
-          {player.isHost && <span className={styles.hostBadge}>Хост</span>}
-          {isMyAssignment && <span className={styles.assignBadge}>Загадайте персонажа</span>}
-        </div>
-        
-        {/* Для игрока, которому я загадываю */}
-        {isMyAssignment && (
-          <div className={styles.characterControls}>
-            {editingCharacter === player.id ? (
-              <div className={styles.characterEditForm}>
-                <input 
-                  type="text" 
-                  className={styles.characterInput}
-                  value={newCharacter}
-                  onChange={(e) => setNewCharacter(e.target.value)}
-                  placeholder="Введите персонажа..."
-                  autoFocus
-                />
-                
-                <div className={styles.editButtons}>
-                  <button 
-                    className={styles.randomButton} 
-                    onClick={getRandomCharacter}
-                    title="Случайный персонаж"
-                  >
-                    🎲
-                  </button>
-                  <button 
-                    className={styles.saveButton} 
-                    onClick={saveCharacter}
-                    disabled={!newCharacter.trim()}
-                  >
-                    Сохранить
-                  </button>
-                  <button 
-                    className={styles.cancelButton} 
-                    onClick={cancelEditing}
-                  >
-                    Отмена
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className={styles.characterDisplay}>
-                <div className={styles.characterName}>
-                  {player.character ? 
-                    `Персонаж: ${player.character}` : 
-                    'Нажмите, чтобы загадать персонажа'}
-                </div>
-                
-                <button 
-                  className={styles.editButton}
-                  onClick={() => startEditingCharacter(player.id)}
-                >
-                  {player.character ? 'Изменить' : 'Загадать'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Для меня */}
-        {isMe && (
-          <div className={styles.characterLabel}>
-            Ваш персонаж: ???
-          </div>
-        )}
-        
-        {/* Для других игроков, которым я не загадываю */}
-        {!isMe && !isMyAssignment && (
-          <div className={styles.characterLabel}>
-            Персонаж: {player.character || 'Ожидание...'}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Обработчик для кнопки "Вернуться в меню"
-  const handleBackButtonClick = useCallback(() => {
-    try {
-      console.log('Выход из комнаты:', gameState.roomCode);
-      // Останавливаем все медиа-треки
-      if (mediasoupApi.getLocalStream()) {
-        mediasoupApi.getLocalStream().getTracks().forEach(track => {
-          try {
-            track.stop();
-          } catch (e) {
-            console.error('Ошибка при остановке трека:', e);
-          }
-        });
-      }
-      
-      // Очищаем ресурсы mediasoup
-      try {
-        mediasoupApi.cleanup();
-      } catch (e) {
-        console.error('Ошибка при очистке mediasoup:', e);
-      }
-      
-      // Выходим из комнаты
-      if (gameState.roomCode) {
-        try {
-          socketApi.leaveRoom(gameState.roomCode);
-        } catch (e) {
-          console.error('Ошибка при выходе из комнаты:', e);
-        }
-      }
-      
-      // Переходим на главную страницу
+  // Выход из игры
+  const handleLeaveGame = () => {
+    videoApi.stop();
       navigate('/');
-    } catch (error) {
-      console.error('Ошибка при возврате в меню:', error);
-      // Принудительно переходим на главную страницу
-      window.location.href = '/';
-    }
-  }, [gameState.roomCode, mediasoupApi.getLocalStream, navigate]);
-
-  // Эффект для автоматического переподключения при изменении статуса сервера
-  useEffect(() => {
-    console.log('Статус сервера изменился:', serverStatus);
-    let reconnectTimeout = null;
-    let mounted = true;
-    
-    // Если статус сервера - ошибка, пробуем переподключиться через 5 секунд
-    if (serverStatus === 'error') {
-      console.log('Установка таймера для автоматического переподключения');
-      reconnectTimeout = setTimeout(() => {
-        if (!mounted) return;
-        console.log('Автоматическая повторная попытка подключения (таймаут)...');
-        retryConnection();
-      }, 5000);
-    } 
-    // Если сервер подключен, проверяем и восстанавливаем WebRTC соединения
-    else if (serverStatus === 'connected') {
-      console.log('Сервер подключен, проверяем WebRTC соединения');
-      
-      const checkAndReconnect = async () => {
-        try {
-          if (!mounted) return;
-          
-          if (mediasoupApi.getLocalStream()) {
-            // Проверяем, инициализирован ли mediasoup
-            if (!mediasoupApi.initialized && gameState.roomCode) {
-              console.log('Mediasoup не инициализирован, выполняем инициализацию для комнаты', gameState.roomCode);
-              await mediasoupApi.init(gameState.roomCode);
-              // Если инициализация прошла успешно, публикуем существующий поток
-              if (mediasoupApi.initialized) {
-                console.log('Публикуем существующий поток после инициализации');
-                await mediasoupApi.publishStream(mediasoupApi.getLocalStream());
-              }
-            } else if (mediasoupApi.initialized) {
-              // Проверяем и восстанавливаем соединения, если необходимо
-              const reconnected = await mediasoupApi.reconnectIfNeeded();
-              if (reconnected) {
-                console.log('WebRTC соединения проверены и восстановлены');
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Ошибка при проверке и восстановлении соединений:', error);
-        }
-      };
-      
-      // Запускаем проверку с небольшой задержкой
-      reconnectTimeout = setTimeout(() => {
-        checkAndReconnect();
-      }, 1000);
-    }
-    
-    return () => {
-      mounted = false;
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-    };
-  }, [serverStatus, retryConnection]);
-
-  // Добавляю опцию для запуска без камеры
-  const startGameWithoutCamera = () => {
-    // Функция заглушка для совместимости
-    console.log('Игра без камеры');
-    return;
   };
 
   return (
     <div className={styles.gamePage}>
-      <div className={styles.gameContainer}>
-        <div className={styles.header}>
-          <h1 className={styles.title}>
-            {gameState.roomCode ? `Комната: ${gameState.roomCode}` : 'Загрузка...'}
-          </h1>
-          
-          <div className={styles.gameControls}>
-            <span className={styles.playerInfo}>
-              Вы: {gameState.playerName}
-            </span>
-            
-            {!gameState.gameStarted && gameState.isHost && serverStatus === 'connected' && (
-              <button 
-                className={styles.startButton}
-                onClick={startGame}
-              >
-                Начать игру
-              </button>
-            )}
-            
-            {!gameState.gameStarted && serverStatus === 'connected' && (
-              <button 
-                className={styles.copyButton}
-                onClick={copyRoomCode}
-              >
-                Копировать код
-              </button>
-            )}
-            
-            <button 
-              className={styles.backButton}
-              onClick={handleBackButtonClick}
-            >
-              Вернуться в меню
-            </button>
-          </div>
+      {/* Верхняя панель с информацией об игре */}
+      <div className={styles.gameHeader}>
+        <div className={styles.roomInfo}>
+          <h2>Комната: {gameState.roomCode}</h2>
+          {serverStatus === 'connecting' && <div className={styles.connecting}>Подключение...</div>}
+          {serverStatus === 'error' && <div className={styles.error}>{error || 'Ошибка подключения'}</div>}
         </div>
+          <div className={styles.gameControls}>
+          {gameState.isHost && !gameState.gameStarted && (
+            <button className={styles.startButton} onClick={handleStartGame}>
+              Начать игру
+            </button>
+          )}
+          <button className={styles.leaveButton} onClick={handleLeaveGame}>
+            Выйти
+          </button>
+        </div>
+      </div>
 
-        {error ? (
-          <div className={styles.errorMessage}>
-            <p>{error}</p>
-            <div className={styles.errorActions}>
-              {error.includes('доступ к камере запрещен') || error.includes('Доступ к камере заблокирован') || error.includes('используется другим приложением') ? (
-                <>
-                  <button
-                    className={styles.retryButton}
-                    onClick={async () => {
-                      try {
-                        const permissionStatus = await navigator.permissions.query({ name: 'camera' });
-                        
-                        // Если разрешение не получено, направляем пользователя
-                        if (permissionStatus.state === 'denied') {
-                          setError('Чтобы разрешить доступ к камере:' +
-                            '\n1. Нажмите на иконку замка/информации в адресной строке' +
-                            '\n2. Найдите "Разрешения" или "Права сайта"' +
-                            '\n3. Разрешите доступ к камере' +
-                            '\n4. Обновите страницу (F5)'
-                          );
-                        } else {
-                          // Если разрешение получено или ожидается повторный запрос
-                          setError(null);
-                          initializeMedia();
-                        }
-                      } catch (e) {
-                        // Если не удалось проверить разрешения, просто запрашиваем еще раз
-                        setError(null);
-                        initializeMedia();
-                      }
-                    }}
-                  >
-                    Разрешить доступ к камере
-                  </button>
-                  <button 
-                    className={styles.retryButton}
-                    onClick={async () => {
-                      try {
-                        // Создаем временный видеоэлемент для открытия системного диалога выбора камеры
-                        const tempVideo = document.createElement('video');
-                        tempVideo.style.position = 'fixed';
-                        tempVideo.style.top = '-9999px';
-                        tempVideo.style.left = '-9999px';
-                        document.body.appendChild(tempVideo);
-                        
-                        // Получаем список устройств
-                        const devices = await navigator.mediaDevices.enumerateDevices();
-                        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                        
-                        if (videoDevices.length > 0) {
-                          console.log('Доступные камеры:', videoDevices);
-                          
-                          // Открываем системный диалог выбора устройства
-                          // Для этого запрашиваем доступ с указанием deviceId: 'default'
-                          const stream = await navigator.mediaDevices.getUserMedia({
-                            audio: false,
-                            video: { deviceId: 'default' }
-                          });
-                          
-                          // Останавливаем поток, он нам не нужен, только для вызова диалога
-                          stream.getTracks().forEach(track => track.stop());
-                          
-                          // Удаляем временный элемент
-                          document.body.removeChild(tempVideo);
-                          
-                          // Запускаем инициализацию снова
-                          setError(null);
-                          initializeMedia();
-                        } else {
-                          setError('Не найдено ни одной камеры. Подключите камеру и перезагрузите страницу.');
-                        }
-                      } catch (err) {
-                        console.error('Ошибка при попытке показать диалог выбора камеры:', err);
-                        setError(`Не удалось открыть диалог выбора камеры: ${err.message}`);
-                      }
-                    }}
-                  >
-                    Выбрать другую камеру
-                  </button>
-                  <button 
-                    className={styles.altButton}
-                    onClick={startGameWithoutCamera}
-                  >
-                    Продолжить без камеры
-                  </button>
-                  <button 
-                    className={styles.homeButton}
-                    onClick={() => navigate('/')}
-                  >
-                    Вернуться на главную
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button 
-                    className={styles.retryButton}
-                    onClick={() => {
-                      setError(null);
-                      initializeMedia();
-                    }}
-                  >
-                    Повторить
-                  </button>
-                  <button 
-                    className={styles.altButton}
-                    onClick={startGameWithoutCamera}
-                  >
-                    Продолжить без камеры
-                  </button>
-                </>
-              )}
+      {/* Основной контент игры */}
+      <div className={styles.gameContent}>
+        {/* Сетка с видео игроков */}
+        <div className={styles.videoGrid}>
+          {/* Локальный игрок */}
+          <div className={`${styles.videoBox} ${styles.localVideo}`}>
+            <PlayerVideo
+              stream={localVideoRef.current?.srcObject || null}
+              playerId={gameState.playerId}
+              playerName={gameState.playerName}
+              character={gameState.characters[gameState.playerId]}
+              isCurrentPlayer={true}
+              isVideoEnabled={videoEnabled}
+              isAudioEnabled={audioEnabled}
+            />
+            <div className={styles.videoControls}>
+              <button 
+                className={videoEnabled ? styles.videoOn : styles.videoOff} 
+                onClick={toggleVideo}
+                title={videoEnabled ? "Выключить камеру" : "Включить камеру"}
+              >
+                {videoEnabled ? '🎥' : '🚫'}
+              </button>
+              <button 
+                className={audioEnabled ? styles.audioOn : styles.audioOff} 
+                onClick={toggleAudio}
+                title={audioEnabled ? "Выключить микрофон" : "Включить микрофон"}
+              >
+                {audioEnabled ? '🔊' : '🔇'}
+              </button>
             </div>
           </div>
-        ) : serverStatus === 'connecting' ? (
-          <div className={styles.loadingMessage}>
-            <div className={styles.spinner}></div>
-            <p>Подключение к серверу...</p>
-          </div>
-        ) : serverStatus === 'connected' && !gameState.gameStarted ? (
-          <div className={styles.lobby}>
-            <h2>Ожидание игроков...</h2>
-            <p className={styles.lobbyInfo}>
-              Поделитесь кодом комнаты <strong>{gameState.roomCode}</strong> с друзьями, чтобы они могли присоединиться. Всего может участвовать до 6 игроков.
-            </p>
-            
-            <div className={styles.videoGrid}>
-              {gameState.players.length === 0 ? (
-                <div className={styles.noPlayersMessage}>
-                  <p>Ожидание подключения игроков...</p>
-                  <p>Если вы не видите себя в списке игроков, попробуйте обновить страницу.</p>
-                </div>
-              ) : (
-                gameState.players.map((player) => (
+
+          {/* Удаленные игроки */}
+          {gameState.players
+            .filter(player => player.id !== gameState.playerId)
+            .filter((player, index, self) => 
+              // Удаляем дубликаты по ID
+              index === self.findIndex(p => p.id === player.id)
+            )
+            .map((player) => (
+              <div key={`player-${player.id}`} className={styles.videoBox}>
                   <PlayerVideo 
-                    key={player.id} 
-                    player={player} 
-                    localStream={mediasoupApi.getLocalStream()}
-                    cameraEnabled={mediasoupApi.initialized}
-                    micEnabled={mediasoupApi.initialized}
-                    toggleCamera={toggleCamera}
-                    toggleMicrophone={toggleMicrophone}
-                    remoteStreams={remoteStreams}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        ) : serverStatus === 'connected' && gameState.gameStarted ? (
-          <div className={styles.gameArea}>
-            <div className={styles.gameContent}>
-              <h2>Игра началась!</h2>
-              <p className={styles.gameDescription}>
-                Задавайте другим игрокам вопросы, на которые можно ответить "да" или "нет", чтобы выяснить, кто вы. 
-                Угадайте свой персонаж раньше остальных!
-              </p>
-              
-              <div className={styles.mainGameLayout}>
-                <div className={styles.videoSection}>
-                  <div className={styles.videoGrid}>
-                    {gameState.players.map((player) => (
-                      <div key={player.id} className={styles.videoAndControls}>
-                        <PlayerVideo 
-                          player={player} 
-                          localStream={mediasoupApi.getLocalStream()}
-                          cameraEnabled={mediasoupApi.initialized}
-                          micEnabled={mediasoupApi.initialized}
-                          toggleCamera={toggleCamera}
-                          toggleMicrophone={toggleMicrophone}
-                          remoteStreams={remoteStreams}
+                  stream={remoteStreams[player.id]}
+                  playerId={player.id}
+                  playerName={player.name}
+                  character={gameState.characters[player.id]}
+                  isCurrentPlayer={false}
+                  isVideoEnabled={true}
+                  isAudioEnabled={true}
+                />
+                {gameState.gameStarted && gameState.characterAssignments[gameState.playerId] === player.id && (
+                  <div className={styles.assignCharacter}>
+                    {editingCharacter === player.id ? (
+                      <div className={styles.characterForm}>
+                        <input
+                          type="text"
+                          value={newCharacter}
+                          onChange={(e) => setNewCharacter(e.target.value)}
+                          placeholder="Введите персонажа"
                         />
-                        <PlayerCharacterInfo player={player} />
+                        <div className={styles.formButtons}>
+                          <button onClick={() => handleAssignCharacter(player.id)}>Назначить</button>
+                          <button onClick={() => setEditingCharacter(null)}>Отмена</button>
+                        </div>
                       </div>
-                    ))}
+                    ) : (
+                      <button 
+                        onClick={() => setEditingCharacter(player.id)}
+                        className={styles.assignButton}
+                      >
+                        Назначить персонажа
+                      </button>
+                    )}
                   </div>
+                )}
+              </div>
+            ))}
                 </div>
                 
-                <div className={styles.sidePanel}>
-                  <div className={styles.notesSection}>
-                    <h3>Мои заметки</h3>
-                    <textarea 
-                      className={styles.notesArea} 
-                      placeholder="Записывайте свои мысли и подсказки здесь..." 
-                      value={notes}
-                      onChange={handleNotesChange}
-                    />
+        {/* Боковая панель игры */}
+        <div className={styles.gameSidebar}>
+          {gameState.gameStarted ? (
+            <>
+              <div className={styles.gameInfo}>
+                <h3>Игра началась!</h3>
+                {gameState.characters[gameState.playerId] ? (
+                  <p>Ваш персонаж: <strong>???</strong></p>
+                ) : (
+                  <p>Ожидайте, пока вам загадают персонажа</p>
+                )}
                   </div>
                   
-                  <div className={styles.hintsSection}>
-                    <h3>Примеры вопросов</h3>
-                    <ul className={styles.hintsList}>
+              <div className={styles.hintQuestions}>
+                <h3>Подсказки для вопросов:</h3>
+                <ul>
                       {hintQuestions.map((question, index) => (
-                        <li key={index} className={styles.hintItem}>{question}</li>
+                    <li key={index}>{question}</li>
                       ))}
                     </ul>
                   </div>
-                </div>
+              
+              <div className={styles.notes}>
+                <h3>Ваши заметки:</h3>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Записывайте здесь свои догадки..."
+                  className={styles.notesArea}
+                />
               </div>
+            </>
+          ) : (
+            <div className={styles.waitingRoom}>
+              <h3>Ожидание игроков</h3>
+              <p>В комнате {gameState.players.length} игроков</p>
+              <ul className={styles.playersList}>
+                {gameState.players.map((player, index) => (
+                  <li key={`player-list-${player.id}-${index}`}>
+                    {player.name} {player.isHost && ' (Хост)'}
+                    {player.id === gameState.playerId && ' (Вы)'}
+                  </li>
+                ))}
+              </ul>
+              {gameState.isHost && gameState.players.length >= 2 ? (
+                <p>Можно начинать игру!</p>
+              ) : gameState.isHost ? (
+                <p>Нужно минимум 2 игрока для начала игры</p>
+              ) : (
+                <p>Ожидайте, когда хост начнет игру</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className={styles.errorModal}>
+          <div className={styles.errorContent}>
+            <h3>Произошла ошибка</h3>
+            <p>{error}</p>
+            <div className={styles.errorActions}>
+              <button 
+                onClick={() => setError('')}
+                className={styles.continueButton}
+              >
+                Продолжить без камеры
+              </button>
             </div>
           </div>
-        ) : null}
       </div>
+      )}
+
+      {/* Скрытый видео элемент для локального потока */}
+      <video
+        ref={localVideoRef}
+        autoPlay
+        playsInline
+        muted
+        style={{ display: 'none' }}
+      />
     </div>
   );
 };

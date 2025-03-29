@@ -13,8 +13,6 @@
     "concurrently": "^8.2.2"
   },
   "dependencies": {
-    "jaloqa-website": "file:",
-    "mediasoup": "^3.15.7",
-    "mediasoup-client": "^3.9.5"
+    "jaloqa-website": "file:"
   }
 }
