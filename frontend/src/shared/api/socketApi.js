@@ -7,7 +7,7 @@ class SocketApi {
     this.socketId = null;
     this.connected = false;
     this.listeners = new Map();
-    this.serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+    this.serverUrl = 'https://github-pages-coonfig-test.vercel.app';
     this.connectionAttempts = 0;
     this.maxConnectionAttempts = 5;
   }
@@ -26,17 +26,6 @@ class SocketApi {
     
     console.log('Инициализация сокета, подключение к:', this.serverUrl);
     
-    // Проверка доступности сервера перед подключением
-    this.checkServerAvailability()
-      .then(available => {
-        if (!available) {
-          console.warn('Предварительная проверка показала, что сервер недоступен');
-        }
-      })
-      .catch(err => {
-        console.error('Ошибка при проверке доступности сервера:', err);
-      });
-    
     // Создаем новое подключение
     try {
       // Если есть существующее соединение, закрываем его
@@ -48,60 +37,54 @@ class SocketApi {
       
       // Создаем новый сокет
       this.socket = io(this.serverUrl, {
-        transports: ['websocket', 'polling'],
-        timeout: 10000,
+        transports: ['polling'],
+        timeout: 60000,
         reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 3000,
+        reconnectionDelayMax: 15000,
         autoConnect: true,
         path: '/socket.io/',
         forceNew: true,
         multiplex: false,
-        upgrade: true,
-        rememberUpgrade: true,
-        secure: false,
-        rejectUnauthorized: false
+        upgrade: false,
+        rememberUpgrade: false,
+        secure: true,
+        rejectUnauthorized: false,
+        withCredentials: true,
+        extraHeaders: {
+          'x-vercel-protection-bypass': 'ODjj85wkLvMNdHMyTmekRQjzuLoPNBFw',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, x-vercel-protection-bypass'
+        }
       });
       
-      // Обработка событий соединения
+      // Устанавливаем обработчики событий
       this.socket.on('connect', () => {
-        console.log('Сокет подключен, ID:', this.socket.id);
+        console.log('Соединение установлено');
         this.connected = true;
-        this.socketId = this.socket.id;
         this.connectionAttempts = 0;
       });
       
       this.socket.on('connect_error', (error) => {
         console.error('Ошибка подключения:', error);
         this.connected = false;
-        this.connectionAttempts++;
-        
-        if (this.connectionAttempts <= this.maxConnectionAttempts) {
-          console.log(`Повторная попытка подключения ${this.connectionAttempts} из ${this.maxConnectionAttempts}...`);
-        } else {
-          console.error('Превышено максимальное количество попыток подключения');
-          // Здесь можно добавить код для отображения сообщения пользователю
-          alert('Ошибка подключения к серверу. Пожалуйста, убедитесь, что сервер запущен и обновите страницу.');
-        }
       });
       
       this.socket.on('disconnect', (reason) => {
-        console.log('Сокет отключен, причина:', reason);
+        console.log('Соединение разорвано:', reason);
         this.connected = false;
       });
       
       this.socket.on('reconnect', (attemptNumber) => {
-        console.log('Повторное подключение установлено, попытка #', attemptNumber);
+        console.log('Переподключение успешно, попытка:', attemptNumber);
         this.connected = true;
+        this.connectionAttempts = 0;
       });
       
-      this.socket.on('reconnect_error', (error) => {
-        console.error('Ошибка повторного подключения:', error);
-      });
-      
-      this.socket.on('reconnect_failed', () => {
-        console.error('Все попытки повторного подключения не удались');
+      this.socket.on('error', (error) => {
+        console.error('Ошибка сокета:', error);
       });
       
       // Обработка обновлений комнаты
@@ -194,17 +177,19 @@ class SocketApi {
       }
       
       // Устанавливаем таймаут для проверки
-      const timeout = 3000; // 3 секунды
+      const timeout = 5000; // 5 секунд
       
       try {
         // Простое подключение через Socket.IO для проверки
         return new Promise((resolve) => {
           // Создаем временное соединение для проверки
           const testSocket = io(this.serverUrl, {
-            transports: ['websocket', 'polling'],
+            transports: ['polling'],
             timeout: timeout,
             reconnection: false,
-            forceNew: true
+            forceNew: true,
+            upgrade: false,
+            rememberUpgrade: false
           });
           
           // Установим таймаут для соединения

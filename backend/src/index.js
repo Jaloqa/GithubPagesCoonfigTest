@@ -8,23 +8,29 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const server = createServer(app);
-const io = new Server(server, {
-    cors: { 
-      origin: "*", // Разрешаем доступ с любых доменов
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "Accept"],
-      credentials: false,
-      transports: ['websocket', 'polling']
-    }
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+  },
+  transports: ['polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 45000,
+  allowUpgrades: false,
+  maxHttpBufferSize: 1e8,
+  path: '/socket.io/'
 });
 
-// Настройка CORS для Express
+// Middleware
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  credentials: false
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  credentials: true
 }));
 
 app.use(express.json());
@@ -40,10 +46,24 @@ app.get('/', (req, res) => {
   });
 });
 
-// WebSocket обработчики
+// Обработка ошибок
+io.engine.on('connection_error', (err) => {
+  console.error('Ошибка подключения:', err);
+});
+
+// Обработка подключений
 io.on('connection', (socket) => {
-  console.log('Новый игрок подключился:', socket.id);
-  
+  console.log('Клиент подключился:', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('Клиент отключился:', socket.id);
+  });
+
+  // Обработка ошибок сокета
+  socket.on('error', (error) => {
+    console.error('Ошибка сокета:', error);
+  });
+
   // Создание комнаты
   socket.on('create-room', ({ playerName }) => {
     const roomId = generateRoomCode();
@@ -248,7 +268,7 @@ function assignCharacters(playerIds) {
 }
 
 // Определение порта и запуск сервера
-const port = process.env.PORT || 3002;
-server.listen(port, () => {
-  console.log(`🚀 Сервер запущен на порту ${port}`);
+const PORT = process.env.PORT || 3001;
+httpServer.listen(PORT, () => {
+  console.log(`Сервер запущен на порту ${PORT}`);
 });

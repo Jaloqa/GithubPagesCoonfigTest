@@ -17,6 +17,14 @@ export default defineConfig({
     },
     watch: {
       usePolling: true
+    },
+    proxy: {
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        ws: false,
+        changeOrigin: true,
+        secure: false
+      }
     }
   },
   resolve: {
@@ -27,7 +35,17 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    assetsDir: 'assets',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'socket.io': ['socket.io-client'],
+          'react': ['react', 'react-dom'],
+          'react-router': ['react-router-dom']
+        }
+      }
+    }
   },
   define: {
     // Полифиллы для Node.js API, необходимые для simple-peer
