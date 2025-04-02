@@ -1,4 +1,28 @@
-import { v4 as uuidv4 } from 'uuid';
+const { v4: uuidv4 } = require('uuid');
+
+// Хранение информации о комнатах и игроках
+const rooms = {}; // { roomId: { players: [], gameStarted: false, characterAssignments: {} } }
+
+// Генерация кода комнаты (4 символов)
+function generateRoomCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// Распределение персонажей между игроками
+function assignCharacters(playerIds) {
+  const assignments = {};
+  for (let i = 0; i < playerIds.length; i++) {
+    const currentPlayerId = playerIds[i];
+    const targetPlayerId = playerIds[(i + 1) % playerIds.length];
+    assignments[currentPlayerId] = targetPlayerId;
+  }
+  return assignments;
+}
 
 class GameManager {
   constructor() {
@@ -7,68 +31,77 @@ class GameManager {
   }
 
   // Создать новую комнату
-  createRoom(hostId, hostName) {
-    // Генерируем 6-символьный код комнаты (буквы и цифры)
-    const roomCode = this.generateRoomCode();
+  async createRoom(playerName) {
+    const roomId = generateRoomCode();
     
-    const room = {
-      roomCode,
-      hostId,
-      players: [{ id: hostId, name: hostName, isHost: true, character: '', videoEnabled: false }],
-      gameStarted: false,
-      characterAssignments: {},
-      created: new Date()
-    };
-
-    this.rooms[roomCode] = room;
-    return roomCode;
-  }
-
-  // Сгенерировать код комнаты
-  generateRoomCode() {
-    // Генерируем 6-символьный альфа-цифровой код
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    
-    // Проверяем, что код уникальный
-    if (this.rooms[code]) {
-      return this.generateRoomCode(); // Рекурсивно пробуем снова
-    }
-    
-    return code;
-  }
-
-  // Присоединиться к комнате
-  joinRoom(roomCode, playerId, playerName) {
-    const room = this.rooms[roomCode];
-    
-    if (!room) {
-      return { success: false, error: 'Комната не найдена' };
-    }
-    
-    if (room.gameStarted) {
-      return { success: false, error: 'Игра уже началась' };
-    }
-    
-    // Проверяем, не присоединился ли этот игрок уже
-    const existingPlayer = room.players.find(p => p.id === playerId);
-    if (existingPlayer) {
-      return { success: true, roomData: room };
+    if (!rooms[roomId]) {
+      rooms[roomId] = {
+        players: [],
+        gameStarted: false,
+        characterAssignments: {},
+        characters: {}
+      };
     }
     
     // Добавляем игрока в комнату
-    room.players.push({
+    const playerId = `player_${Date.now()}`;
+    rooms[roomId].players.push({
       id: playerId,
       name: playerName,
-      isHost: false,
-      character: '',
-      videoEnabled: false
+      isHost: true
     });
     
-    return { success: true, roomData: room };
+    console.log(`Комната создана: ${roomId} игроком ${playerName}`);
+    
+    return {
+      success: true,
+      roomCode: roomId,
+      playerId,
+      isHost: true
+    };
+  }
+
+  // Присоединиться к комнате
+  async joinRoom(roomCode, playerName) {
+    if (!rooms[roomCode]) {
+      throw new Error('Комната не найдена');
+    }
+    
+    const playerId = `player_${Date.now()}`;
+    rooms[roomCode].players.push({
+      id: playerId,
+      name: playerName,
+      isHost: false
+    });
+    
+    console.log(`Игрок ${playerName} присоединился к комнате ${roomCode}`);
+    
+    return {
+      success: true,
+      roomCode,
+      playerId,
+      isHost: false
+    };
+  }
+
+  // Начать игру
+  async startGame(roomCode) {
+    const room = rooms[roomCode];
+    if (!room) {
+      throw new Error('Комната не найдена');
+    }
+    
+    room.gameStarted = true;
+    const playerIds = room.players.map(player => player.id);
+    room.characterAssignments = assignCharacters(playerIds);
+    
+    console.log(`Игра началась в комнате ${roomCode}`);
+    
+    return {
+      success: true,
+      gameStarted: true,
+      characterAssignments: room.characterAssignments
+    };
   }
 
   // Получить данные комнаты
@@ -93,79 +126,107 @@ class GameManager {
   }
   
   // Установить персонажа для игрока
-  setCharacter(roomCode, targetPlayerId, character) {
-    const room = this.rooms[roomCode];
-    if (!room) return false;
-    
-    const playerIndex = room.players.findIndex(p => p.id === targetPlayerId);
-    if (playerIndex === -1) return false;
-    
-    room.players[playerIndex].character = character;
-    return true;
-  }
-  
-  // Начать игру
-  startGame(roomCode) {
-    const room = this.rooms[roomCode];
-    if (!room) return false;
-    
-    // Генерируем случайные назначения персонажей
-    room.characterAssignments = this.assignCharacters(room.players);
-    room.gameStarted = true;
-    
-    return true;
-  }
-  
-  // Функция для назначения, кто кому загадывает персонажа
-  assignCharacters(players) {
-    const assignments = {};
-    
-    // Создаем массив для перемешивания
-    const playerIds = players.map(player => player.id);
-    
-    // Перемешиваем массив для случайного распределения
-    for (let i = playerIds.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
+  async setCharacter(roomCode, targetPlayerId, character) {
+    const room = rooms[roomCode];
+    if (!room) {
+      throw new Error('Комната не найдена');
     }
     
-    // Каждый игрок загадывает следующему в перемешанном массиве
-    // Последний загадывает первому (кольцевое распределение)
-    playerIds.forEach((playerId, index) => {
-      // Следующий игрок по кругу
-      const nextPlayerIndex = (index + 1) % playerIds.length;
-      const nextPlayerId = playerIds[nextPlayerIndex];
-      
-      assignments[playerId] = nextPlayerId;
-    });
+    if (!room.gameStarted) {
+      throw new Error('Игра еще не началась');
+    }
     
-    return assignments;
+    if (!room.characters) {
+      room.characters = {};
+    }
+    
+    room.characters[targetPlayerId] = character;
+    
+    console.log(`Персонаж "${character}" назначен игроку в комнате ${roomCode}`);
+    
+    return {
+      success: true,
+      character,
+      targetPlayerId
+    };
   }
   
-  // Удалить игрока из комнаты
-  removePlayer(roomCode, playerId) {
-    const room = this.rooms[roomCode];
-    if (!room) return false;
-    
-    const playerIndex = room.players.findIndex(p => p.id === playerId);
-    if (playerIndex === -1) return false;
-    
-    // Удаляем игрока
-    room.players.splice(playerIndex, 1);
-    
-    // Если комната пуста, удаляем её
-    if (room.players.length === 0) {
-      delete this.rooms[roomCode];
-      return true;
+  // Получить список игроков
+  async getPlayers(roomCode) {
+    const room = rooms[roomCode];
+    if (!room) {
+      throw new Error('Комната не найдена');
     }
     
-    // Если ушёл хост, назначаем нового хоста
-    if (room.players.every(p => !p.isHost) && room.players.length > 0) {
-      room.players[0].isHost = true;
-      room.hostId = room.players[0].id;
+    return {
+      players: room.players,
+      gameStarted: room.gameStarted,
+      characterAssignments: room.characterAssignments,
+      characters: room.characters
+    };
+  }
+  
+  // Выход из комнаты
+  async leaveRoom(roomCode) {
+    const room = rooms[roomCode];
+    if (!room) {
+      throw new Error('Комната не найдена');
     }
     
-    return true;
+    // Удаляем комнату, если она пуста
+    if (room.players.length <= 1) {
+      delete rooms[roomCode];
+    } else {
+      // Если это был хост, назначаем нового
+      const playerIndex = room.players.findIndex(p => p.id === room.hostId);
+      if (playerIndex !== -1) {
+        room.players.splice(playerIndex, 1);
+        room.hostId = room.players[0].id;
+        room.players[0].isHost = true;
+      }
+    }
+    
+    console.log(`Игрок покинул комнату ${roomCode}`);
+    
+    return { success: true };
+  }
+  
+  // Получить состояние комнаты
+  async getRoomState(roomCode) {
+    const room = rooms[roomCode];
+    if (!room) {
+      throw new Error('Комната не найдена');
+    }
+    
+    return {
+      players: room.players,
+      gameStarted: room.gameStarted,
+      characterAssignments: room.characterAssignments,
+      characters: room.characters
+    };
+  }
+  
+  // Обновление состояния игрока
+  async updatePlayerState(roomCode, playerState) {
+    const room = rooms[roomCode];
+    if (!room) {
+      throw new Error('Комната не найдена');
+    }
+    
+    const playerIndex = room.players.findIndex(p => p.id === playerState.id);
+    if (playerIndex === -1) {
+      throw new Error('Игрок не найден');
+    }
+    
+    room.players[playerIndex] = {
+      ...room.players[playerIndex],
+      ...playerState
+    };
+    
+    return {
+      success: true,
+      player: room.players[playerIndex]
+    };
   }
   
   // Получить имя игрока по ID
@@ -195,4 +256,4 @@ class GameManager {
 }
 
 // Экспортируем синглтон
-export default new GameManager(); 
+module.exports = new GameManager(); 

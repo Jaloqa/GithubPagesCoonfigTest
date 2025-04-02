@@ -1,5 +1,7 @@
-import mediasoup from 'mediasoup';
-import os from 'os';
+const mediasoup = require('mediasoup');
+const os = require('os');
+const { Device } = require('mediasoup-client');
+const { types } = require('mediasoup');
 
 class MediaManager {
   constructor() {
@@ -8,6 +10,9 @@ class MediaManager {
     this.peers = new Map(); // peerId -> { roomId, transports: [], producers: [], consumers: [] }
     this.numWorkers = Object.keys(os.cpus()).length;
     this.nextWorkerIndex = 0;
+    this.device = new Device();
+    this.connections = new Map();
+    this.localStream = null;
   }
 
   // Инициализация медиа-серверов mediasoup
@@ -434,8 +439,92 @@ class MediaManager {
     this.peers.clear();
     console.log('MediaManager закрыт');
   }
+
+  // Инициализация устройства
+  async initDevice(routerRtpCapabilities) {
+    try {
+      await this.device.load({ routerRtpCapabilities });
+      return { success: true };
+    } catch (error) {
+      console.error('Ошибка инициализации устройства:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Создание транспортного соединения
+  async createTransport(transportInfo) {
+    try {
+      const transport = await this.device.createSendTransport(transportInfo);
+      this.connections.set(transport.id, transport);
+      return { success: true, transport };
+    } catch (error) {
+      console.error('Ошибка создания транспортного соединения:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Подключение к удаленному транспорту
+  async connectTransport(transportId, dtlsParameters) {
+    try {
+      const transport = this.connections.get(transportId);
+      if (!transport) {
+        throw new Error('Транспорт не найден');
+      }
+      await transport.connect({ dtlsParameters });
+      return { success: true };
+    } catch (error) {
+      console.error('Ошибка подключения к транспорту:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Отправка медиапотока
+  async sendTrack(transportId, track) {
+    try {
+      const transport = this.connections.get(transportId);
+      if (!transport) {
+        throw new Error('Транспорт не найден');
+      }
+      const producer = await transport.produce({ track });
+      return { success: true, producer };
+    } catch (error) {
+      console.error('Ошибка отправки медиапотока:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Получение медиапотока
+  async receiveTrack(transportId, producerId) {
+    try {
+      const transport = this.connections.get(transportId);
+      if (!transport) {
+        throw new Error('Транспорт не найден');
+      }
+      const consumer = await transport.consume({ producerId });
+      return { success: true, consumer };
+    } catch (error) {
+      console.error('Ошибка получения медиапотока:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Остановка всех соединений
+  stopAllConnections() {
+    this.connections.forEach(transport => {
+      transport.close();
+    });
+    this.connections.clear();
+  }
+
+  // Остановка локального потока
+  stopLocalStream() {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+    }
+  }
 }
 
-// Экспорт синглтона
+// Экспортируем синглтон
 const mediaManager = new MediaManager();
-export default mediaManager; 
+module.exports = mediaManager; 

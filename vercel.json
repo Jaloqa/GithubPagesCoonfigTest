@@ -15,34 +15,28 @@
   ],
   "routes": [
     {
-      "src": "/socket.io/(.*)",
-      "dest": "backend/src/index.js",
+      "src": "/api/(.*)",
+      "dest": "/backend/src/index.js",
       "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept, x-vercel-protection-bypass",
+        "Access-Control-Allow-Origin": "https://jaloqa.github.io",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-vercel-protection-bypass",
         "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400",
         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
         "Pragma": "no-cache",
-        "Expires": "0",
-        "Connection": "keep-alive"
-      },
-      "continue": true
-    },
-    {
-      "src": "/GithubPagesCoonfigTest/(.*)",
-      "dest": "frontend/dist/$1",
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "X-Requested-With, Content-Type, Accept, x-vercel-protection-bypass",
-        "Cache-Control": "public, max-age=0, must-revalidate"
+        "Expires": "0"
       }
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/dist/$1"
+      "dest": "/frontend/dist/$1",
+      "headers": {
+        "Access-Control-Allow-Origin": "https://jaloqa.github.io",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Credentials": "true",
+        "Cache-Control": "public, max-age=0, must-revalidate"
+      }
     }
   ],
   "env": {

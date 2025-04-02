@@ -1,114 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './HomePage.module.css';
-import socketApi from '@/shared/api/socketApi';
+import gameApi from '@/shared/api/socketApi';
 
 export const HomePage = () => {
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
   const navigate = useNavigate();
 
-  // Инициализация сокета при первой загрузке страницы
-  useEffect(() => {
-    // Инициализируем соединение
-    const socket = socketApi.init();
-    
-    // Проверяем соединение
-    const checkConnection = () => {
-      const connected = socketApi.isConnected();
-      setIsConnected(connected);
-      if (!connected) {
-        console.log('Переподключение к серверу...');
-        setError('Ожидание подключения к серверу. Убедитесь, что сервер запущен.');
-      } else {
-        setError('');
-      }
-    };
-    
-    // Проверяем соединение сразу
-    checkConnection();
-    
-    // И периодически проверяем соединение
-    const connectionTimer = setInterval(checkConnection, 3000);
-
-    // Слушаем событие создания комнаты
-    socketApi.on('room-created', (data) => {
-      setIsLoading(false);
-      console.log('Комната создана:', data);
-      
-      if (data.success) {
-        // После успешного создания комнаты перенаправляем на страницу игры
-        navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(data.roomCode)}&host=true`);
-      } else {
-        // Показываем ошибку при неудачном создании
-        setError(data.error || 'Не удалось создать комнату');
-      }
-    });
-
-    // Слушаем событие присоединения к комнате
-    socketApi.on('room-joined', (data) => {
-      setIsLoading(false);
-      console.log('Присоединение к комнате:', data);
-      
-      if (data.success) {
-        // После успешного присоединения перенаправляем на страницу игры
-        navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(roomCode)}`);
-      } else {
-        // Показываем ошибку
-        setError(data.error || 'Не удалось присоединиться к комнате');
-      }
-    });
-
-    // Слушаем ошибки соединения
-    socketApi.on('connect_error', (err) => {
-      console.error('Ошибка соединения Socket.IO:', err);
-      setError(`Ошибка соединения с сервером: ${err.message}`);
-      setIsLoading(false);
-    });
-
-    // Очистка при размонтировании
-    return () => {
-      clearInterval(connectionTimer);
-      socketApi.off('room-created');
-      socketApi.off('room-joined');
-      socketApi.off('connect_error');
-    };
-  }, [navigate, name, roomCode]);
-
-  const handleCreateRoom = () => {
-    if (!isConnected) {
-      setError('Нет соединения с сервером. Пожалуйста, подождите или перезагрузите страницу.');
-      return;
-    }
-
+  const handleCreateRoom = async () => {
     if (!name.trim()) {
       setError('Введите ваше имя');
       return;
     }
 
-    setError('');
     setIsLoading(true);
-    
+    setError('');
+
     try {
-      console.log('Отправка запроса на создание комнаты:', name);
-      // Отправляем запрос на создание комнаты
-      socketApi.createRoom(name);
-    } catch (err) {
-      console.error('Ошибка при создании комнаты:', err);
-      setError(`Ошибка соединения с сервером: ${err.message}`);
+      const result = await gameApi.createRoom(name);
+      if (result && result.roomCode) {
+        localStorage.setItem('roomCode', result.roomCode);
+        navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(result.roomCode)}&host=true`);
+      } else {
+        setError('Не удалось создать комнату');
+      }
+    } catch (error) {
+      setError(error.message || 'Произошла ошибка при создании комнаты');
+    } finally {
       setIsLoading(false);
     }
   };
 
-  const handleJoinRoom = () => {
-    if (!isConnected) {
-      setError('Нет соединения с сервером. Пожалуйста, подождите или перезагрузите страницу.');
-      return;
-    }
-
+  const handleJoinRoom = async () => {
     if (!name.trim()) {
       setError('Введите ваше имя');
       return;
@@ -119,77 +45,58 @@ export const HomePage = () => {
       return;
     }
 
-    setError('');
     setIsLoading(true);
-    
+    setError('');
+
     try {
-      console.log('Отправка запроса на присоединение к комнате:', roomCode, name);
-      // Отправляем запрос на присоединение к комнате
-      socketApi.joinRoom(roomCode, name);
-    } catch (err) {
-      console.error('Ошибка при присоединении к комнате:', err);
-      setError(`Ошибка соединения с сервером: ${err.message}`);
+      const result = await gameApi.joinRoom(roomCode, name);
+      if (result && result.success) {
+        localStorage.setItem('roomCode', roomCode);
+        navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(roomCode)}`);
+      } else {
+        setError(result?.error || 'Не удалось присоединиться к комнате');
+      }
+    } catch (error) {
+      setError(error.message || 'Произошла ошибка при присоединении к комнате');
+    } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className={styles.homePage}>
-      <div className={styles.container}>
-        <h1 className={styles.title}>Who Am I?</h1>
-        <p className={styles.subtitle}>A fun game to play with your friends</p>
-        
-        {!isConnected && (
-          <div className={styles.connectionStatus}>
-            Connecting to server...
-          </div>
-        )}
-        
-        {error && <div className={styles.errorMessage}>{error}</div>}
-        
-        <div className={`${styles.formGroup} ${styles.nameInput}`}>
-          <input
-            type="text"
-            className={styles.input}
-            placeholder="Enter name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={isLoading || !isConnected}
-          />
-        </div>
-        
-        <div className={styles.formGroup}>
+    <div className={styles.container}>
+      <h1>Добро пожаловать в игру</h1>
+      <div className={styles.form}>
+        <input
+          type="text"
+          placeholder="Ваше имя"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={isLoading}
+        />
+        <input
+          type="text"
+          placeholder="Код комнаты (для присоединения)"
+          value={roomCode}
+          onChange={(e) => setRoomCode(e.target.value)}
+          disabled={isLoading}
+        />
+        <div className={styles.buttons}>
           <button 
-            className={styles.createButton}
             onClick={handleCreateRoom}
-            disabled={isLoading || !isConnected}
+            disabled={isLoading}
           >
-            {isLoading ? 'Creating...' : 'Create room'}
+            Создать комнату
           </button>
-        </div>
-        
-        <div className={styles.divider}>or</div>
-        
-        <div className={styles.formGroup}>
-          <input
-            type="text"
-            className={styles.input}
-            placeholder="Room code"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            disabled={isLoading || !isConnected}
-          />
-        </div>
-        
-        <div className={styles.formGroup}>
           <button 
-            className={styles.joinButton}
             onClick={handleJoinRoom}
-            disabled={isLoading || !isConnected}
+            disabled={isLoading}
           >
-            {isLoading ? 'Joining...' : 'Join'}
+            Присоединиться
           </button>
         </div>
+        {error && <p className={styles.error}>{error}</p>}
+        {isLoading && <p className={styles.loading}>Загрузка...</p>}
       </div>
     </div>
   );
