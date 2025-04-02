@@ -1,45 +1,64 @@
-# Jaloqa Website
+# Who Am I? - Party Game 🎮
 
-Полнофункциональное веб-приложение с React фронтендом и Node.js бэкендом.
+## About
+Who Am I? is an interactive party game where players need to guess who they are by asking questions to other participants. The game features WebRTC video calls, making it perfect for online parties!
 
-## Структура проекта
+## Key Features
+- 🎥 Video calls between players
+- 🎯 Create and join game rooms
+- 👥 Support for multiple players
+- 🎭 Character system
+- 🔄 Real-time game state updates
+- 🌐 Mobile device support
 
-```
-jaloqa.github.io/
-├── frontend/     # React приложение (Vite)
-├── backend/      # Node.js API сервер
-└── package.json  # Корневой package.json для управления проектом
-```
+## Technologies
+- Frontend:
+  - React.js
+  - WebRTC (mediasoup)
+  - Socket.IO
+  - CSS Modules
+- Backend:
+  - Node.js
+  - Express
+  - mediasoup
+  - WebSocket
 
-## Установка
 
-1. Клонируйте репозиторий:
+## Installation and Setup
+
+### Local Development
+1. Clone the repository:
 ```bash
 git clone https://github.com/jaloqa/jaloqa.github.io.git
-cd jaloqa.github.io
 ```
 
-2. Установите зависимости:
+2. Install dependencies:
 ```bash
-npm run install:all
+# Install frontend dependencies
+cd frontend
+npm install
+
+# Install backend dependencies
+cd ../backend
+npm install
 ```
 
-## Разработка
-
-Запустите оба сервера (фронтенд и бэкенд) одновременно:
+3. Start the development server:
 ```bash
+# Start backend
+cd backend
+npm run dev
+
+# Start frontend
+cd frontend
 npm run dev
 ```
 
-Или запустите их по отдельности:
-```bash
-npm run frontend  # Запуск только фронтенда
-npm run backend   # Запуск только бэкенда
-```
+### Deployment
+The project is automatically deployed to Vercel when pushing to the main branch.
 
-## Деплой
+## License
+MIT
 
-Для деплоя на GitHub Pages:
-```bash
-npm run deploy
-``` 
+## Author
+Jaloqa 
