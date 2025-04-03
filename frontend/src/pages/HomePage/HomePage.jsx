@@ -12,7 +12,7 @@ export const HomePage = () => {
 
   const handleCreateRoom = async () => {
     if (!name.trim()) {
-      setError('Введите ваше имя');
+      setError('Please enter your name');
       return;
     }
 
@@ -25,10 +25,10 @@ export const HomePage = () => {
         localStorage.setItem('roomCode', result.roomCode);
         navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(result.roomCode)}&host=true`);
       } else {
-        setError('Не удалось создать комнату');
+        setError('Failed to create room');
       }
     } catch (error) {
-      setError(error.message || 'Произошла ошибка при создании комнаты');
+      setError(error.message || 'An error occurred while creating the room');
     } finally {
       setIsLoading(false);
     }
@@ -36,12 +36,12 @@ export const HomePage = () => {
 
   const handleJoinRoom = async () => {
     if (!name.trim()) {
-      setError('Введите ваше имя');
+      setError('Please enter your name');
       return;
     }
 
     if (!roomCode.trim()) {
-      setError('Введите код комнаты');
+      setError('Please enter room code');
       return;
     }
 
@@ -54,10 +54,10 @@ export const HomePage = () => {
         localStorage.setItem('roomCode', roomCode);
         navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(roomCode)}`);
       } else {
-        setError(result?.error || 'Не удалось присоединиться к комнате');
+        setError(result?.error || 'Failed to join room');
       }
     } catch (error) {
-      setError(error.message || 'Произошла ошибка при присоединении к комнате');
+      setError(error.message || 'An error occurred while joining the room');
     } finally {
       setIsLoading(false);
     }
@@ -65,38 +65,46 @@ export const HomePage = () => {
 
   return (
     <div className={styles.container}>
-      <h1>Добро пожаловать в игру</h1>
+      <h1 className={styles.title}>Who Am I?</h1>
+      <p className={styles.subtitle}>A fun party game to play with friends</p>
+      
       <div className={styles.form}>
         <input
           type="text"
-          placeholder="Ваше имя"
+          className={styles.input}
+          placeholder="Enter your name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={isLoading}
         />
         <input
           type="text"
-          placeholder="Код комнаты (для присоединения)"
+          className={styles.input}
+          placeholder="Room code (to join)"
           value={roomCode}
-          onChange={(e) => setRoomCode(e.target.value)}
+          onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
           disabled={isLoading}
         />
+        
         <div className={styles.buttons}>
           <button 
+            className={`${styles.button} ${styles.createButton}`}
             onClick={handleCreateRoom}
             disabled={isLoading}
           >
-            Создать комнату
+            Create Room
           </button>
           <button 
+            className={`${styles.button} ${styles.joinButton}`}
             onClick={handleJoinRoom}
             disabled={isLoading}
           >
-            Присоединиться
+            Join Room
           </button>
         </div>
+
         {error && <p className={styles.error}>{error}</p>}
-        {isLoading && <p className={styles.loading}>Загрузка...</p>}
+        {isLoading && <p className={styles.loading}>Loading...</p>}
       </div>
     </div>
   );
