@@ -2,40 +2,36 @@
   "version": 2,
   "builds": [
     {
+      "src": "backend/index.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": {
         "distDir": "dist"
       }
-    },
-    {
-      "src": "backend/src/index.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/backend/src/index.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://jaloqa.github.io",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-vercel-protection-bypass",
-        "Access-Control-Allow-Credentials": "true",
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
-      }
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/dist/$1",
+      "dest": "backend/index.js",
       "headers": {
         "Access-Control-Allow-Origin": "https://jaloqa.github.io",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Cache-Control": "public, max-age=0, must-revalidate"
+        "Access-Control-Allow-Credentials": "true"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/dist/$1",
+      "headers": {
+        "Access-Control-Allow-Origin": "https://jaloqa.github.io",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Credentials": "true"
       }
     }
   ],

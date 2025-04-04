@@ -1,134 +1,123 @@
-import { io } from 'socket.io-client';
-import mediasoupApi from './mediasoupApi';
-
 class GameApi {
   constructor() {
     this.baseUrl = window.location.hostname === 'localhost' 
-      ? 'http://localhost:3001'
-      : 'https://github-pages-coonfig-test.vercel.app';
-    this.headers = {
-      'Content-Type': 'application/json',
-      'x-vercel-protection-bypass': 'ODjj85wkLvMNdHMyTmekRQjzuLoPNBFw'
+      ? 'ws://localhost:3001'
+      : 'wss://github-pages-coonfig-test.vercel.app';
+    this.socket = null;
+    this.messageHandlers = new Map();
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectTimeout = 1000;
+  }
+
+  connect() {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    this.socket = new WebSocket(this.baseUrl);
+
+    this.socket.onopen = () => {
+      console.log('WebSocket connection established');
+      this.reconnectAttempts = 0;
+    };
+
+    this.socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        const { type, data } = message;
+        
+        if (this.messageHandlers.has(type)) {
+          this.messageHandlers.get(type).forEach(handler => handler(data));
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+
+    this.socket.onclose = () => {
+      console.log('WebSocket connection closed');
+      this.reconnect();
+    };
+
+    this.socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
     };
   }
 
-  async request(endpoint, method = 'GET', data = null) {
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        method,
-        headers: this.headers,
-        body: data ? JSON.stringify(data) : null,
-        mode: 'cors',
-        credentials: 'include',
-        referrerPolicy: 'no-referrer'
-      });
+  reconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+      setTimeout(() => this.connect(), this.reconnectTimeout * this.reconnectAttempts);
+    } else {
+      console.error('Max reconnection attempts reached');
+    }
+  }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+  on(type, handler) {
+    if (!this.messageHandlers.has(type)) {
+      this.messageHandlers.set(type, []);
+    }
+    this.messageHandlers.get(type).push(handler);
+  }
+
+  off(type, handler) {
+    if (this.messageHandlers.has(type)) {
+      const handlers = this.messageHandlers.get(type);
+      const index = handlers.indexOf(handler);
+      if (index !== -1) {
+        handlers.splice(index, 1);
       }
+    }
+  }
 
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error(`API Error (${method} ${endpoint}):`, error);
-      throw error;
+  send(type, data) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({ type, data }));
+    } else {
+      console.error('WebSocket is not connected');
     }
   }
 
   // Создание комнаты
-  async createRoom(playerName) {
-    try {
-      const result = await this.request('/api/rooms/create', 'POST', { playerName });
-      if (!result) {
-        throw new Error('Не удалось создать комнату');
-      }
-      return result;
-    } catch (error) {
-      console.error('Ошибка при создании комнаты:', error);
-      throw error;
-    }
+  createRoom(playerName) {
+    this.send('create-room', { playerName });
   }
 
   // Присоединение к комнате
-  async joinRoom(roomCode, playerName) {
-    try {
-      const result = await this.request('/api/rooms/join', 'POST', { roomCode, playerName });
-      return result;
-    } catch (error) {
-      console.error('Ошибка при присоединении к комнате:', error);
-      return null;
-    }
+  joinRoom(roomCode, playerName) {
+    this.send('join-room', { roomCode, playerName });
   }
 
   // Начало игры
-  async startGame(roomCode) {
-    try {
-      const result = await this.request('/api/games/start', 'POST', { roomCode });
-      return result;
-    } catch (error) {
-      console.error('Ошибка при начале игры:', error);
-      return null;
-    }
+  startGame(roomCode) {
+    this.send('start-game', { roomCode });
   }
 
-  // Получение списка игроков в комнате
-  async getPlayers(roomCode) {
-    try {
-      const result = await this.request(`/api/rooms/${roomCode}/players`);
-      return result;
-    } catch (error) {
-      console.error('Ошибка при получении списка игроков:', error);
-      return null;
-    }
+  // Получение списка игроков
+  getPlayers(roomCode) {
+    this.send('get-players', { roomCode });
   }
 
-  // Установка персонажа для игрока
-  async setCharacter(roomCode, targetPlayerId, character) {
-    try {
-      const result = await this.request('/api/players/character', 'POST', {
-        roomCode,
-        targetPlayerId,
-        character
-      });
-      return result;
-    } catch (error) {
-      console.error('Ошибка при установке персонажа:', error);
-      return null;
-    }
+  // Установка персонажа
+  setCharacter(roomCode, targetPlayerId, character) {
+    this.send('set-character', { roomCode, targetPlayerId, character });
   }
 
   // Выход из комнаты
-  async leaveRoom(roomCode) {
-    try {
-      const result = await this.request(`/api/rooms/${roomCode}/leave`, 'POST');
-      return result;
-    } catch (error) {
-      console.error('Ошибка при выходе из комнаты:', error);
-      return null;
-    }
+  leaveRoom(roomCode) {
+    this.send('leave-room', { roomCode });
   }
 
   // Получение состояния комнаты
-  async getRoomState(roomCode) {
-    try {
-      const result = await this.request(`/api/rooms/${roomCode}/state`);
-      return result;
-    } catch (error) {
-      console.error('Ошибка при получении состояния комнаты:', error);
-      return null;
-    }
+  getRoomState(roomCode) {
+    this.send('get-room-state', { roomCode });
   }
 
   // Обновление состояния игрока
-  async updatePlayerState(roomCode, playerState) {
-    try {
-      const result = await this.request(`/api/rooms/${roomCode}/player-state`, 'POST', playerState);
-      return result;
-    } catch (error) {
-      console.error('Ошибка при обновлении состояния игрока:', error);
-      return null;
-    }
+  updatePlayerState(roomCode, playerState) {
+    this.send('update-player-state', { roomCode, playerState });
   }
 
   // Периодический опрос состояния комнаты
@@ -137,35 +126,23 @@ class GameApi {
       clearInterval(this._pollingInterval);
     }
 
-    this._pollingInterval = setInterval(async () => {
-      try {
-        const state = await this.getRoomState(roomCode);
-        if (state && typeof callback === 'function') {
-          callback(state);
-        } else if (!state) {
-          console.warn('Получен пустой ответ от сервера');
-          if (typeof callback === 'function') {
-            callback({ players: [], gameStarted: false });
-          }
-        }
-      } catch (error) {
-        console.error('Ошибка при получении обновлений комнаты:', error);
-        // При ошибке отправляем пустое состояние
-        if (typeof callback === 'function') {
-          callback({ players: [], gameStarted: false });
-        }
-      }
+    this._pollingInterval = setInterval(() => {
+      this.getRoomState(roomCode);
     }, interval);
+
+    this.on('room-state', callback);
   }
 
-  // Остановка опроса
   stopPolling() {
     if (this._pollingInterval) {
       clearInterval(this._pollingInterval);
       this._pollingInterval = null;
     }
   }
+
+  isConnected() {
+    return this.socket && this.socket.readyState === WebSocket.OPEN;
+  }
 }
 
-// Экспортируем синглтон
 export default new GameApi(); 
