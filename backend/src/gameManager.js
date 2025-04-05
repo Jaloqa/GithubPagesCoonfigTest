@@ -3,6 +3,11 @@ const { v4: uuidv4 } = require('uuid');
 // Хранение информации о комнатах и игроках
 const rooms = {}; // { roomId: { players: [], gameStarted: false, characterAssignments: {} } }
 
+// Константы
+const MAX_PLAYERS = 8;
+const GAME_START_TIMEOUT = 30; // секунды
+const ROOM_EXPIRE_TIME = 24 * 60 * 60 * 1000; // 24 часа
+
 // Генерация кода комнаты (4 символов)
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -26,8 +31,8 @@ function assignCharacters(playerIds) {
 
 class GameManager {
   constructor() {
-    // Хранилище комнат: { roomCode: Room }
     this.rooms = {};
+    this.startGameTimers = {};
   }
 
   // Создать новую комнату
@@ -39,7 +44,10 @@ class GameManager {
         players: [],
         gameStarted: false,
         characterAssignments: {},
-        characters: {}
+        characters: {},
+        created: Date.now(),
+        startGameTimer: null,
+        maxPlayers: MAX_PLAYERS
       };
     }
     
@@ -48,7 +56,8 @@ class GameManager {
     rooms[roomId].players.push({
       id: playerId,
       name: playerName,
-      isHost: true
+      isHost: true,
+      lastActive: Date.now()
     });
     
     console.log(`Комната создана: ${roomId} игроком ${playerName}`);
@@ -57,7 +66,8 @@ class GameManager {
       success: true,
       roomCode: roomId,
       playerId,
-      isHost: true
+      isHost: true,
+      maxPlayers: MAX_PLAYERS
     };
   }
 
@@ -67,11 +77,20 @@ class GameManager {
       throw new Error('Комната не найдена');
     }
     
+    if (rooms[roomCode].players.length >= rooms[roomCode].maxPlayers) {
+      throw new Error('Комната заполнена');
+    }
+    
+    if (rooms[roomCode].gameStarted) {
+      throw new Error('Игра уже началась');
+    }
+    
     const playerId = `player_${Date.now()}`;
     rooms[roomCode].players.push({
       id: playerId,
       name: playerName,
-      isHost: false
+      isHost: false,
+      lastActive: Date.now()
     });
     
     console.log(`Игрок ${playerName} присоединился к комнате ${roomCode}`);
@@ -80,7 +99,8 @@ class GameManager {
       success: true,
       roomCode,
       playerId,
-      isHost: false
+      isHost: false,
+      maxPlayers: rooms[roomCode].maxPlayers
     };
   }
 
@@ -91,9 +111,19 @@ class GameManager {
       throw new Error('Комната не найдена');
     }
     
+    if (room.players.length < 2) {
+      throw new Error('Для начала игры нужно минимум 2 игрока');
+    }
+    
     room.gameStarted = true;
     const playerIds = room.players.map(player => player.id);
     room.characterAssignments = assignCharacters(playerIds);
+    
+    // Очищаем таймер начала игры
+    if (room.startGameTimer) {
+      clearTimeout(room.startGameTimer);
+      room.startGameTimer = null;
+    }
     
     console.log(`Игра началась в комнате ${roomCode}`);
     
@@ -102,6 +132,19 @@ class GameManager {
       gameStarted: true,
       characterAssignments: room.characterAssignments
     };
+  }
+
+  // Обновить активность игрока
+  async updatePlayerActivity(roomCode, playerId) {
+    const room = rooms[roomCode];
+    if (!room) return false;
+    
+    const player = room.players.find(p => p.id === playerId);
+    if (player) {
+      player.lastActive = Date.now();
+      return true;
+    }
+    return false;
   }
 
   // Получить данные комнаты
@@ -119,7 +162,8 @@ class GameManager {
     
     room.players[playerIndex] = {
       ...room.players[playerIndex],
-      ...updates
+      ...updates,
+      lastActive: Date.now()
     };
     
     return true;
@@ -162,31 +206,40 @@ class GameManager {
       players: room.players,
       gameStarted: room.gameStarted,
       characterAssignments: room.characterAssignments,
-      characters: room.characters
+      characters: room.characters,
+      maxPlayers: room.maxPlayers
     };
   }
   
   // Выход из комнаты
-  async leaveRoom(roomCode) {
+  async leaveRoom(roomCode, playerId) {
     const room = rooms[roomCode];
     if (!room) {
       throw new Error('Комната не найдена');
     }
     
+    const playerIndex = room.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1) {
+      throw new Error('Игрок не найден');
+    }
+    
+    const wasHost = room.players[playerIndex].isHost;
+    room.players.splice(playerIndex, 1);
+    
+    // Если это был хост и остались игроки, назначаем нового хоста
+    if (wasHost && room.players.length > 0) {
+      room.players[0].isHost = true;
+    }
+    
     // Удаляем комнату, если она пуста
-    if (room.players.length <= 1) {
+    if (room.players.length === 0) {
       delete rooms[roomCode];
-    } else {
-      // Если это был хост, назначаем нового
-      const playerIndex = room.players.findIndex(p => p.id === room.hostId);
-      if (playerIndex !== -1) {
-        room.players.splice(playerIndex, 1);
-        room.hostId = room.players[0].id;
-        room.players[0].isHost = true;
+      if (room.startGameTimer) {
+        clearTimeout(room.startGameTimer);
       }
     }
     
-    console.log(`Игрок покинул комнату ${roomCode}`);
+    console.log(`Игрок ${playerId} покинул комнату ${roomCode}`);
     
     return { success: true };
   }
@@ -202,7 +255,8 @@ class GameManager {
       players: room.players,
       gameStarted: room.gameStarted,
       characterAssignments: room.characterAssignments,
-      characters: room.characters
+      characters: room.characters,
+      maxPlayers: room.maxPlayers
     };
   }
   
@@ -220,7 +274,8 @@ class GameManager {
     
     room.players[playerIndex] = {
       ...room.players[playerIndex],
-      ...playerState
+      ...playerState,
+      lastActive: Date.now()
     };
     
     return {
@@ -238,18 +293,21 @@ class GameManager {
     return player ? player.name : null;
   }
   
-  // Очистка старых комнат (для периодического вызова)
+  // Очистка старых комнат
   cleanupRooms() {
-    const now = new Date();
-    const expireTime = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
+    const now = Date.now();
     
-    Object.keys(this.rooms).forEach(roomCode => {
-      const room = this.rooms[roomCode];
+    Object.keys(rooms).forEach(roomCode => {
+      const room = rooms[roomCode];
       const roomAge = now - room.created;
       
       // Удаляем комнаты старше 24 часов
-      if (roomAge > expireTime) {
-        delete this.rooms[roomCode];
+      if (roomAge > ROOM_EXPIRE_TIME) {
+        if (room.startGameTimer) {
+          clearTimeout(room.startGameTimer);
+        }
+        delete rooms[roomCode];
+        console.log(`Комната ${roomCode} удалена из-за неактивности`);
       }
     });
   }

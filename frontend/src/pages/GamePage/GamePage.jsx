@@ -15,6 +15,8 @@ export const GamePage = () => {
   const [newCharacter, setNewCharacter] = useState('');
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
+  const [gameStartTimer, setGameStartTimer] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
   const localVideoRef = useRef(null);
   const [remoteStreams, setRemoteStreams] = useState({});
 
@@ -28,7 +30,8 @@ export const GamePage = () => {
     // Карта кто кому загадывает слова (playerId -> assignedToPlayerId)
     characterAssignments: {},
     // Персонажи, присвоенные игрокам
-    characters: {}
+    characters: {},
+    maxPlayers: 8
   });
 
   // Подсказки для наводящих вопросов
@@ -116,10 +119,16 @@ export const GamePage = () => {
         ...prev,
         players: uniquePlayers,
         gameStarted: data.gameStarted || prev.gameStarted,
-        // Сохраняем другие данные из обновления
         characterAssignments: data.characterAssignments || prev.characterAssignments,
-        characters: data.characters || prev.characters
+        characters: data.characters || prev.characters,
+        maxPlayers: data.maxPlayers || prev.maxPlayers
       }));
+
+      // Если игра не началась и есть таймер, обновляем его
+      if (!data.gameStarted && data.startGameTimer) {
+        setGameStartTimer(data.startGameTimer);
+        setTimeLeft(Math.ceil((data.startGameTimer - Date.now()) / 1000));
+      }
     };
     
     const handleGameStarted = (data) => {
@@ -129,6 +138,8 @@ export const GamePage = () => {
         gameStarted: true,
         characterAssignments: data.characterAssignments
       }));
+      setGameStartTimer(null);
+      setTimeLeft(0);
     };
     
     const handleCharacterAssigned = (data) => {
@@ -140,6 +151,11 @@ export const GamePage = () => {
           [socketApi.getSocketId()]: data.character
         }
       }));
+    };
+
+    const handleConnectionFailed = () => {
+      setServerStatus('error');
+      setError('Не удалось подключиться к серверу. Пожалуйста, попробуйте позже.');
     };
     
     const handleConnect = () => {
@@ -160,6 +176,7 @@ export const GamePage = () => {
     socketApi.on('game-started', handleGameStarted);
     socketApi.on('character-assigned', handleCharacterAssigned);
     socketApi.on('connect', handleConnect);
+    socketApi.on('connection-failed', handleConnectionFailed);
     
     // Если уже подключены, присоединяемся к комнате
     if (socketApi.isConnected()) {
@@ -172,8 +189,28 @@ export const GamePage = () => {
       socketApi.off('game-started', handleGameStarted);
       socketApi.off('character-assigned', handleCharacterAssigned);
       socketApi.off('connect', handleConnect);
+      socketApi.off('connection-failed', handleConnectionFailed);
+      if (gameStartTimer) {
+        clearInterval(gameStartTimer);
+      }
     };
   }, [gameState.roomCode, gameState.playerName, gameState.isHost]);
+
+  // Таймер обратного отсчета
+  useEffect(() => {
+    if (timeLeft > 0) {
+      const timer = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [timeLeft]);
 
   // Инициализация видео
   useEffect(() => {
@@ -275,7 +312,10 @@ export const GamePage = () => {
 
   // Обработчик для начала игры
   const handleStartGame = () => {
-    if (!gameState.isHost) return;
+    if (gameState.players.length < 2) {
+      setError('Для начала игры нужно минимум 2 игрока');
+      return;
+    }
     socketApi.startGame(gameState.roomCode);
   };
 
@@ -311,182 +351,193 @@ export const GamePage = () => {
 
   // Выход из игры
   const handleLeaveGame = () => {
-    videoApi.stop();
-      navigate('/');
+    if (gameState.playerId) {
+      socketApi.leaveRoom(gameState.roomCode, gameState.playerId);
+    }
+    navigate('/');
   };
 
   return (
     <div className={styles.gamePage}>
-      {/* Верхняя панель с информацией об игре */}
-      <div className={styles.gameHeader}>
+      <div className={styles.header}>
         <div className={styles.roomInfo}>
-          <h2>Комната: {gameState.roomCode}</h2>
-          {serverStatus === 'connecting' && <div className={styles.connecting}>Подключение...</div>}
-          {serverStatus === 'error' && <div className={styles.error}>{error || 'Ошибка подключения'}</div>}
+          <span>Комната: {gameState.roomCode}</span>
+          <span>Игроков: {gameState.players.length}/{gameState.maxPlayers}</span>
+          {timeLeft > 0 && <span>До начала игры: {timeLeft}с</span>}
         </div>
-          <div className={styles.gameControls}>
+        <button className={styles.leaveButton} onClick={handleLeaveGame}>
+          Покинуть игру
+        </button>
+      </div>
+
+      {error && <div className={styles.error}>{error}</div>}
+
+      {serverStatus === 'connecting' && (
+        <div className={styles.loading}>Подключение к серверу...</div>
+      )}
+
+      {serverStatus === 'error' && (
+        <div className={styles.error}>
+          Ошибка подключения. Пожалуйста, проверьте соединение и попробуйте снова.
+        </div>
+      )}
+
+      {serverStatus === 'connected' && (
+        <div className={styles.gameArea}>
+          <div className={styles.players}>
+            {gameState.players.map(player => (
+              <PlayerVideo
+                key={player.id}
+                player={player}
+                stream={remoteStreams[player.id]}
+                isCurrentPlayer={player.id === gameState.playerId}
+              />
+            ))}
+          </div>
+
           {gameState.isHost && !gameState.gameStarted && (
-            <button className={styles.startButton} onClick={handleStartGame}>
+            <button
+              className={styles.startButton}
+              onClick={handleStartGame}
+              disabled={gameState.players.length < 2}
+            >
               Начать игру
             </button>
           )}
-          <button className={styles.leaveButton} onClick={handleLeaveGame}>
-            Выйти
-          </button>
-        </div>
-      </div>
 
-      {/* Основной контент игры */}
-      <div className={styles.gameContent}>
-        {/* Сетка с видео игроков */}
-        <div className={styles.videoGrid}>
-          {/* Локальный игрок */}
-          <div className={`${styles.videoBox} ${styles.localVideo}`}>
-            <PlayerVideo
-              stream={localVideoRef.current?.srcObject || null}
-              playerId={gameState.playerId}
-              playerName={gameState.playerName}
-              character={gameState.characters[gameState.playerId]}
-              isCurrentPlayer={true}
-              isVideoEnabled={videoEnabled}
-              isAudioEnabled={audioEnabled}
-            />
-            <div className={styles.videoControls}>
-              <button 
-                className={videoEnabled ? styles.videoOn : styles.videoOff} 
-                onClick={toggleVideo}
-                title={videoEnabled ? "Выключить камеру" : "Включить камеру"}
-              >
-                {videoEnabled ? '🎥' : '🚫'}
-              </button>
-              <button 
-                className={audioEnabled ? styles.audioOn : styles.audioOff} 
-                onClick={toggleAudio}
-                title={audioEnabled ? "Выключить микрофон" : "Включить микрофон"}
-              >
-                {audioEnabled ? '🔊' : '🔇'}
-              </button>
+          {/* Сетка с видео игроков */}
+          <div className={styles.videoGrid}>
+            {/* Локальный игрок */}
+            <div className={`${styles.videoBox} ${styles.localVideo}`}>
+              <PlayerVideo
+                stream={localVideoRef.current?.srcObject || null}
+                playerId={gameState.playerId}
+                playerName={gameState.playerName}
+                character={gameState.characters[gameState.playerId]}
+                isCurrentPlayer={true}
+                isVideoEnabled={videoEnabled}
+                isAudioEnabled={audioEnabled}
+              />
+              <div className={styles.videoControls}>
+                <button 
+                  className={videoEnabled ? styles.videoOn : styles.videoOff} 
+                  onClick={toggleVideo}
+                  title={videoEnabled ? "Выключить камеру" : "Включить камеру"}
+                >
+                  {videoEnabled ? '🎥' : '🚫'}
+                </button>
+                <button 
+                  className={audioEnabled ? styles.audioOn : styles.audioOff} 
+                  onClick={toggleAudio}
+                  title={audioEnabled ? "Выключить микрофон" : "Включить микрофон"}
+                >
+                  {audioEnabled ? '🔊' : '🔇'}
+                </button>
+              </div>
             </div>
+
+            {/* Удаленные игроки */}
+            {gameState.players
+              .filter(player => player.id !== gameState.playerId)
+              .filter((player, index, self) => 
+                // Удаляем дубликаты по ID
+                index === self.findIndex(p => p.id === player.id)
+              )
+              .map((player) => (
+                <div key={`player-${player.id}`} className={styles.videoBox}>
+                    <PlayerVideo 
+                    stream={remoteStreams[player.id]}
+                    playerId={player.id}
+                    playerName={player.name}
+                    character={gameState.characters[player.id]}
+                    isCurrentPlayer={false}
+                    isVideoEnabled={true}
+                    isAudioEnabled={true}
+                  />
+                  {gameState.gameStarted && gameState.characterAssignments[gameState.playerId] === player.id && (
+                    <div className={styles.assignCharacter}>
+                      {editingCharacter === player.id ? (
+                        <div className={styles.characterForm}>
+                          <input
+                            type="text"
+                            value={newCharacter}
+                            onChange={(e) => setNewCharacter(e.target.value)}
+                            placeholder="Введите персонажа"
+                          />
+                          <div className={styles.formButtons}>
+                            <button onClick={() => handleAssignCharacter(player.id)}>Назначить</button>
+                            <button onClick={() => setEditingCharacter(null)}>Отмена</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setEditingCharacter(player.id)}
+                          className={styles.assignButton}
+                        >
+                          Назначить персонажа
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
 
-          {/* Удаленные игроки */}
-          {gameState.players
-            .filter(player => player.id !== gameState.playerId)
-            .filter((player, index, self) => 
-              // Удаляем дубликаты по ID
-              index === self.findIndex(p => p.id === player.id)
-            )
-            .map((player) => (
-              <div key={`player-${player.id}`} className={styles.videoBox}>
-                  <PlayerVideo 
-                  stream={remoteStreams[player.id]}
-                  playerId={player.id}
-                  playerName={player.name}
-                  character={gameState.characters[player.id]}
-                  isCurrentPlayer={false}
-                  isVideoEnabled={true}
-                  isAudioEnabled={true}
-                />
-                {gameState.gameStarted && gameState.characterAssignments[gameState.playerId] === player.id && (
-                  <div className={styles.assignCharacter}>
-                    {editingCharacter === player.id ? (
-                      <div className={styles.characterForm}>
-                        <input
-                          type="text"
-                          value={newCharacter}
-                          onChange={(e) => setNewCharacter(e.target.value)}
-                          placeholder="Введите персонажа"
-                        />
-                        <div className={styles.formButtons}>
-                          <button onClick={() => handleAssignCharacter(player.id)}>Назначить</button>
-                          <button onClick={() => setEditingCharacter(null)}>Отмена</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => setEditingCharacter(player.id)}
-                        className={styles.assignButton}
-                      >
-                        Назначить персонажа
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+          {/* Боковая панель игры */}
+          <div className={styles.gameSidebar}>
+            {gameState.gameStarted ? (
+              <>
+                <div className={styles.gameInfo}>
+                  <h3>Игра началась!</h3>
+                  {gameState.characters[gameState.playerId] ? (
+                    <p>Ваш персонаж: <strong>???</strong></p>
+                  ) : (
+                    <p>Ожидайте, пока вам загадают персонажа</p>
+                  )}
                 </div>
                 
-        {/* Боковая панель игры */}
-        <div className={styles.gameSidebar}>
-          {gameState.gameStarted ? (
-            <>
-              <div className={styles.gameInfo}>
-                <h3>Игра началась!</h3>
-                {gameState.characters[gameState.playerId] ? (
-                  <p>Ваш персонаж: <strong>???</strong></p>
+                <div className={styles.hintQuestions}>
+                  <h3>Подсказки для вопросов:</h3>
+                  <ul>
+                        {hintQuestions.map((question, index) => (
+                      <li key={index}>{question}</li>
+                        ))}
+                      </ul>
+                  </div>
+                
+                <div className={styles.notes}>
+                  <h3>Ваши заметки:</h3>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Записывайте здесь свои догадки..."
+                    className={styles.notesArea}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className={styles.waitingRoom}>
+                <h3>Ожидание игроков</h3>
+                <p>В комнате {gameState.players.length} игроков</p>
+                <ul className={styles.playersList}>
+                  {gameState.players.map((player, index) => (
+                    <li key={`player-list-${player.id}-${index}`}>
+                      {player.name} {player.isHost && ' (Хост)'}
+                      {player.id === gameState.playerId && ' (Вы)'}
+                    </li>
+                  ))}
+                </ul>
+                {gameState.isHost && gameState.players.length >= 2 ? (
+                  <p>Можно начинать игру!</p>
+                ) : gameState.isHost ? (
+                  <p>Нужно минимум 2 игрока для начала игры</p>
                 ) : (
-                  <p>Ожидайте, пока вам загадают персонажа</p>
+                  <p>Ожидайте, когда хост начнет игру</p>
                 )}
-                  </div>
-                  
-              <div className={styles.hintQuestions}>
-                <h3>Подсказки для вопросов:</h3>
-                <ul>
-                      {hintQuestions.map((question, index) => (
-                    <li key={index}>{question}</li>
-                      ))}
-                    </ul>
-                  </div>
-              
-              <div className={styles.notes}>
-                <h3>Ваши заметки:</h3>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Записывайте здесь свои догадки..."
-                  className={styles.notesArea}
-                />
               </div>
-            </>
-          ) : (
-            <div className={styles.waitingRoom}>
-              <h3>Ожидание игроков</h3>
-              <p>В комнате {gameState.players.length} игроков</p>
-              <ul className={styles.playersList}>
-                {gameState.players.map((player, index) => (
-                  <li key={`player-list-${player.id}-${index}`}>
-                    {player.name} {player.isHost && ' (Хост)'}
-                    {player.id === gameState.playerId && ' (Вы)'}
-                  </li>
-                ))}
-              </ul>
-              {gameState.isHost && gameState.players.length >= 2 ? (
-                <p>Можно начинать игру!</p>
-              ) : gameState.isHost ? (
-                <p>Нужно минимум 2 игрока для начала игры</p>
-              ) : (
-                <p>Ожидайте, когда хост начнет игру</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className={styles.errorModal}>
-          <div className={styles.errorContent}>
-            <h3>Произошла ошибка</h3>
-            <p>{error}</p>
-            <div className={styles.errorActions}>
-              <button 
-                onClick={() => setError('')}
-                className={styles.continueButton}
-              >
-                Продолжить без камеры
-              </button>
-            </div>
+            )}
           </div>
-      </div>
+        </div>
       )}
 
       {/* Скрытый видео элемент для локального потока */}

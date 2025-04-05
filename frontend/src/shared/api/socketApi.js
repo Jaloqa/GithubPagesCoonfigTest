@@ -8,6 +8,9 @@ class GameApi {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectTimeout = 1000;
+    this.roomCode = null;
+    this.playerId = null;
+    this.lastActivity = Date.now();
   }
 
   connect() {
@@ -20,6 +23,11 @@ class GameApi {
     this.socket.onopen = () => {
       console.log('WebSocket connection established');
       this.reconnectAttempts = 0;
+      
+      // Если есть сохраненные данные комнаты, пытаемся переподключиться
+      if (this.roomCode && this.playerId) {
+        this.reconnectToRoom(this.roomCode, this.playerId);
+      }
     };
 
     this.socket.onmessage = (event) => {
@@ -52,6 +60,9 @@ class GameApi {
       setTimeout(() => this.connect(), this.reconnectTimeout * this.reconnectAttempts);
     } else {
       console.error('Max reconnection attempts reached');
+      if (this.messageHandlers.has('connection-failed')) {
+        this.messageHandlers.get('connection-failed').forEach(handler => handler());
+      }
     }
   }
 
@@ -75,6 +86,7 @@ class GameApi {
   send(type, data) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ type, data }));
+      this.lastActivity = Date.now();
     } else {
       console.error('WebSocket is not connected');
     }
@@ -87,7 +99,15 @@ class GameApi {
 
   // Присоединение к комнате
   joinRoom(roomCode, playerName) {
+    this.roomCode = roomCode;
     this.send('join-room', { roomCode, playerName });
+  }
+
+  // Переподключение к комнате
+  reconnectToRoom(roomCode, playerId) {
+    this.roomCode = roomCode;
+    this.playerId = playerId;
+    this.send('reconnect-room', { roomCode, playerId });
   }
 
   // Начало игры
@@ -106,8 +126,10 @@ class GameApi {
   }
 
   // Выход из комнаты
-  leaveRoom(roomCode) {
-    this.send('leave-room', { roomCode });
+  leaveRoom(roomCode, playerId) {
+    this.send('leave-room', { roomCode, playerId });
+    this.roomCode = null;
+    this.playerId = null;
   }
 
   // Получение состояния комнаты
@@ -120,28 +142,64 @@ class GameApi {
     this.send('update-player-state', { roomCode, playerState });
   }
 
+  // Обновление активности игрока
+  async updateActivity(roomCode, playerId) {
+    try {
+      await this.send('update-activity', { roomCode, playerId });
+    } catch (error) {
+      if (error.response?.status === 429) {
+        console.warn('Превышен лимит запросов к API. Повторная попытка через 60 секунд.');
+        setTimeout(() => this.updateActivity(roomCode, playerId), 60000);
+      } else {
+        console.error('Ошибка при обновлении активности:', error);
+      }
+    }
+  }
+
   // Периодический опрос состояния комнаты
-  startPolling(roomCode, callback, interval = 2000) {
-    if (this._pollingInterval) {
-      clearInterval(this._pollingInterval);
+  startPolling(roomCode, onUpdate, onError) {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
     }
 
-    this._pollingInterval = setInterval(() => {
-      this.getRoomState(roomCode);
-    }, interval);
+    const poll = async () => {
+      try {
+        const state = await this.getRoomState(roomCode);
+        if (onUpdate) {
+          onUpdate(state);
+        }
+      } catch (error) {
+        console.error('Ошибка при опросе состояния комнаты:', error);
+        if (onError) {
+          onError(error);
+        }
+      }
+    };
 
-    this.on('room-state', callback);
+    // Выполняем первый опрос сразу
+    poll();
+
+    // Затем опрашиваем каждые 5 секунд
+    this.pollingInterval = setInterval(poll, 5000);
   }
 
   stopPolling() {
-    if (this._pollingInterval) {
-      clearInterval(this._pollingInterval);
-      this._pollingInterval = null;
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
   }
 
   isConnected() {
     return this.socket && this.socket.readyState === WebSocket.OPEN;
+  }
+
+  getRoomCode() {
+    return this.roomCode;
+  }
+
+  getPlayerId() {
+    return this.playerId;
   }
 }
 

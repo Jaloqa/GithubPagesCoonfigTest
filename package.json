@@ -10,7 +10,8 @@
     "deploy": "cd frontend && npm run deploy"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "util": "^0.12.5"
   },
   "dependencies": {
     "jaloqa-website": "file:"

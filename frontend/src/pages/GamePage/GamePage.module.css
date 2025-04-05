@@ -1,12 +1,206 @@
 .gamePage {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-height: calc(100vh - 130px); /* Вычитаем высоту header и footer */
-  width: 100%;
-  padding: 20px;
-  box-sizing: border-box;
+  height: 100vh;
   background-color: #1a1625;
+  color: #fff;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #2a2438;
+  border-bottom: 1px solid #3a3348;
+}
+
+.roomInfo {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.roomInfo span {
+  padding: 0.5rem 1rem;
+  background-color: #3a3348;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.leaveButton {
+  padding: 0.5rem 1rem;
+  background-color: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.leaveButton:hover {
+  background-color: #ff6666;
+}
+
+.error {
+  padding: 1rem;
+  margin: 1rem;
+  background-color: #ff4444;
+  color: white;
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.loading {
+  padding: 1rem;
+  margin: 1rem;
+  background-color: #3a3348;
+  color: white;
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.gameArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.startButton {
+  padding: 1rem 2rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  align-self: center;
+}
+
+.startButton:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.startButton:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+.videoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  padding: 1rem;
+  background-color: #2a2438;
+  border-radius: 0.5rem;
+}
+
+.controlButton {
+  padding: 0.5rem 1rem;
+  background-color: #3a3348;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.controlButton:hover {
+  background-color: #4a4358;
+}
+
+.notes {
+  padding: 1rem;
+  background-color: #2a2438;
+  border-radius: 0.5rem;
+}
+
+.notes textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 0.5rem;
+  background-color: #3a3348;
+  color: white;
+  border: 1px solid #4a4358;
+  border-radius: 0.5rem;
+  resize: vertical;
+}
+
+.characterEdit {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #2a2438;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  z-index: 1000;
+}
+
+.characterEdit input {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  background-color: #3a3348;
+  color: white;
+  border: 1px solid #4a4358;
+  border-radius: 0.5rem;
+}
+
+.characterEdit button {
+  padding: 0.5rem 1rem;
+  margin-right: 0.5rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.characterEdit button:last-child {
+  background-color: #ff4444;
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .roomInfo {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .roomInfo span {
+    width: 100%;
+    text-align: center;
+  }
+
+  .leaveButton {
+    width: 100%;
+  }
+
+  .videoGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .gameContainer {
@@ -14,12 +208,6 @@
   flex-direction: column;
   width: 100%;
   max-width: 1200px;
-}
-
-.header {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 30px;
 }
 
 .title {
@@ -39,25 +227,6 @@
 .playerInfo {
   color: #8a8196;
   font-size: 1rem;
-}
-
-.startButton, .copyButton {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.startButton {
-  background-color: #9333ea;
-  color: white;
-  border: none;
-}
-
-.startButton:hover {
-  background-color: #a855f7;
 }
 
 .copyButton {
