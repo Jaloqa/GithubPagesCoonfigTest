@@ -19,9 +19,20 @@ export default defineConfig({
       usePolling: true
     },
     proxy: {
+      '/ws': {
+        target: 'ws://localhost:3002',
+        ws: true,
+        changeOrigin: true,
+        secure: false
+      },
       '/socket.io': {
-        target: 'http://localhost:3001',
-        ws: false,
+        target: 'http://localhost:3002',
+        ws: true,
+        changeOrigin: true,
+        secure: false
+      },
+      '/api': {
+        target: 'http://localhost:3002',
         changeOrigin: true,
         secure: false
       }
@@ -31,7 +42,10 @@ export default defineConfig({
     extensions: ['.js', '.jsx', '.json'],
     alias: {
       '@': path.resolve(__dirname, './src'),
-    },
+      'stream': 'stream-browserify',
+      'buffer': 'buffer',
+      'util': 'util/'
+    }
   },
   build: {
     outDir: 'dist',
@@ -47,10 +61,35 @@ export default defineConfig({
       }
     }
   },
+  optimizeDeps: {
+    esbuildOptions: {
+      // Настраиваем esbuild для корректной обработки модуля util
+      define: {
+        global: 'globalThis'
+      },
+      plugins: [
+        {
+          name: 'fix-util',
+          setup(build) {
+            // Создаем пустые заглушки для проблемных методов
+            build.onResolve({ filter: /util\/debuglog/ }, () => {
+              return { path: 'util/debuglog-shim.js' };
+            });
+            build.onLoad({ filter: /util\/debuglog-shim\.js$/ }, () => {
+              return { contents: 'export default function debuglog() { return function() {}; }' };
+            });
+            build.onResolve({ filter: /util\/inspect/ }, () => {
+              return { path: 'util/inspect-shim.js' };
+            });
+            build.onLoad({ filter: /util\/inspect-shim\.js$/ }, () => {
+              return { contents: 'export default function inspect(obj) { return String(obj); }' };
+            });
+          }
+        }
+      ]
+    }
+  },
   define: {
-    // Полифиллы для Node.js API, необходимые для simple-peer
-    global: 'window',
-    'process.env': '{}',
-    'process.browser': 'true'
+    global: 'globalThis',
   }
 }) 

@@ -4,16 +4,41 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const { generateRoomCode } = require('./utils/roomUtils');
+const path = require('path');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
+
+// Добавляем статические файлы
+app.use('/fonts', express.static(path.join(__dirname, 'public/fonts')));
+
+// Добавляем обработчик для корневого маршрута
+app.get('/', (req, res) => {
+  res.send('Сервер игры работает');
+});
+
+// Добавляем обработчик для API
+app.get('/api/room/:roomCode', (req, res) => {
+  const roomCode = req.params.roomCode;
+  if (!roomCode || !rooms[roomCode]) {
+    return res.status(404).json({ error: 'Комната не найдена' });
+  }
+  
+  res.json(rooms[roomCode]);
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  path: '/socket.io'
 });
 
 // Хранение состояния комнат

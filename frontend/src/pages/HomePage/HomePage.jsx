@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './HomePage.module.css';
 import gameApi from '@/shared/api/socketApi';
@@ -11,72 +11,111 @@ export const HomePage = () => {
   const [isConnected, setIsConnected] = useState(false);
   const navigate = useNavigate();
 
+  // Используем useCallback для создания функций-обработчиков, чтобы они сохраняли референсы
+  const handleRoomCreated = useCallback((data) => {
+    console.log('Комната создана (в HomePage):', data);
+    setIsLoading(false);
+    
+    if (data && data.roomCode) {
+      // Сохраняем данные комнаты в localStorage
+      localStorage.setItem('roomCode', data.roomCode);
+      if (data.playerId) {
+        localStorage.setItem('playerId', data.playerId);
+      }
+      
+      // Переходим на страницу игры
+      navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(data.roomCode)}&host=true`);
+    } else {
+      setError('Не удалось создать комнату. Попробуйте еще раз.');
+    }
+  }, [navigate, name]);
+
+  const handleRoomJoined = useCallback((data) => {
+    console.log('Подключение к комнате (в HomePage):', data);
+    setIsLoading(false);
+    
+    if (data && data.success) {
+      // Сохраняем данные комнаты в localStorage
+      localStorage.setItem('roomCode', roomCode);
+      if (data.playerId) {
+        localStorage.setItem('playerId', data.playerId);
+      }
+      
+      // Переходим на страницу игры
+      navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(roomCode)}`);
+    } else {
+      setError(data?.error || 'Не удалось подключиться к комнате');
+    }
+  }, [navigate, name, roomCode]);
+
+  const handleError = useCallback((error) => {
+    console.error('Ошибка при создании/подключении к комнате:', error);
+    setIsLoading(false);
+    setError(error?.message || 'Произошла ошибка. Проверьте подключение к серверу.');
+  }, []);
+
+  const handleConnectChange = useCallback((isConnected) => {
+    console.log('Изменение статуса подключения:', isConnected);
+    setIsConnected(isConnected);
+  }, []);
+
+  // Устанавливаем обработчики событий при монтировании компонента
   useEffect(() => {
+    console.log('Инициализация HomePage');
+    
+    // Подключаемся к серверу
     gameApi.connect();
-    gameApi.on('connect', () => setIsConnected(true));
-    gameApi.on('disconnect', () => setIsConnected(false));
+    
+    // Устанавливаем обработчики
+    const handleConnect = () => handleConnectChange(true);
+    const handleDisconnect = () => handleConnectChange(false);
+    
+    gameApi.on('connect', handleConnect);
+    gameApi.on('disconnect', handleDisconnect);
     gameApi.on('room-created', handleRoomCreated);
     gameApi.on('room-joined', handleRoomJoined);
     gameApi.on('error', handleError);
+    
+    // Проверяем текущее состояние подключения
+    setIsConnected(gameApi.isConnected());
 
+    // Очищаем обработчики при размонтировании
     return () => {
-      gameApi.off('connect', () => setIsConnected(true));
-      gameApi.off('disconnect', () => setIsConnected(false));
+      console.log('Очистка обработчиков HomePage');
+      gameApi.off('connect', handleConnect);
+      gameApi.off('disconnect', handleDisconnect);
       gameApi.off('room-created', handleRoomCreated);
       gameApi.off('room-joined', handleRoomJoined);
       gameApi.off('error', handleError);
     };
-  }, []);
-
-  const handleRoomCreated = (data) => {
-    if (data && data.roomCode) {
-      localStorage.setItem('roomCode', data.roomCode);
-      navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(data.roomCode)}&host=true`);
-    } else {
-      setError('Failed to create room');
-    }
-    setIsLoading(false);
-  };
-
-  const handleRoomJoined = (data) => {
-    if (data && data.success) {
-      localStorage.setItem('roomCode', roomCode);
-      navigate(`/game?name=${encodeURIComponent(name)}&room=${encodeURIComponent(roomCode)}`);
-    } else {
-      setError(data?.error || 'Failed to join room');
-    }
-    setIsLoading(false);
-  };
-
-  const handleError = (error) => {
-    setError(error.message || 'An error occurred');
-    setIsLoading(false);
-  };
+  }, [handleRoomCreated, handleRoomJoined, handleError, handleConnectChange]);
 
   const handleCreateRoom = () => {
     if (!name.trim()) {
-      setError('Please enter your name');
+      setError('Пожалуйста, введите ваше имя');
       return;
     }
 
     setIsLoading(true);
     setError('');
+    console.log('Создание комнаты для игрока:', name);
     gameApi.createRoom(name);
   };
 
   const handleJoinRoom = () => {
     if (!name.trim()) {
-      setError('Please enter your name');
+      setError('Пожалуйста, введите ваше имя');
       return;
     }
 
     if (!roomCode.trim()) {
-      setError('Please enter room code');
+      setError('Пожалуйста, введите код комнаты');
       return;
     }
 
     setIsLoading(true);
     setError('');
+    console.log('Присоединение к комнате:', roomCode, 'игрок:', name);
     gameApi.joinRoom(roomCode, name);
   };
 
