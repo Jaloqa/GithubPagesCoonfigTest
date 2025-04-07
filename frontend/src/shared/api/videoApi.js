@@ -34,6 +34,7 @@ class VideoApi {
     this.initialized = false;
     this.animationFrames = [];
     this.canvasStreams = {};
+    this.signalListenersSet = false;
   }
 
   // Создание WebRTC пира
@@ -41,41 +42,53 @@ class VideoApi {
     console.log(`Создание WebRTC соединения с ${playerId} (инициатор: ${initiator})`);
     
     if (this.peers[playerId]) {
-      console.log(`Соединение с ${playerId} уже существует`);
-      return;
+      console.log(`Соединение с ${playerId} уже существует. Уничтожаем старое соединение.`);
+      this.peers[playerId].destroy();
+      delete this.peers[playerId];
     }
 
     const options = {
       initiator,
-      trickle: false,
-      stream: this.localStream,
+      trickle: true,
       config: {
         iceServers: [
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' },
-          { urls: 'stun:stun5.l.google.com:19302' },
-          { urls: 'stun:stun6.l.google.com:19302' },
-          { urls: 'stun:stun7.l.google.com:19302' },
-          { urls: 'stun:stun8.l.google.com:19302' },
-          { urls: 'stun:stun9.l.google.com:19302' },
-          { urls: 'stun:stun10.l.google.com:19302' },
-          { urls: 'stun:stun11.l.google.com:19302' },
-          { urls: 'stun:stun12.l.google.com:19302' },
-          { urls: 'stun:stun13.l.google.com:19302' },
-          { urls: 'stun:stun14.l.google.com:19302' },
-          { urls: 'stun:stun15.l.google.com:19302' },
-          { urls: 'stun:stun16.l.google.com:19302' },
-          { urls: 'stun:stun17.l.google.com:19302' },
-          { urls: 'stun:stun18.l.google.com:19302' },
-          { urls: 'stun:stun19.l.google.com:19302' },
-          { urls: 'stun:stun20.l.google.com:19302' }
+          { 
+            urls: 'turn:numb.viagenie.ca',
+            username: 'webrtc@live.com',
+            credential: 'muazkh'
+          }
         ],
         iceTransportPolicy: 'all',
         iceCandidatePoolSize: 10
+      },
+      objectMode: false,
+      sdpTransform: (sdp) => {
+        // Приоритет для видео
+        return sdp.replace('a=group:BUNDLE 0 1\r\n', 'a=group:BUNDLE 1 0\r\n');
       }
     };
+    
+    // Добавляем медиапоток, если он есть
+    if (this.localStream) {
+      options.stream = this.localStream;
+      
+      // Логируем состояние треков
+      const videoTracks = this.localStream.getVideoTracks();
+      if (videoTracks.length > 0) {
+        console.log(`Добавление локального видео в peer для ${playerId}. Статус трека:`, {
+          enabled: videoTracks[0].enabled,
+          readyState: videoTracks[0].readyState,
+          muted: videoTracks[0].muted
+        });
+      } else {
+        console.warn(`Нет видеотреков для добавления в peer для ${playerId}`);
+      }
+    } else {
+      console.warn(`Создание peer без медиапотока для ${playerId}`);
+    }
     
     try {
       const peer = new Peer(options);
@@ -100,6 +113,17 @@ class VideoApi {
             });
           }
         }
+        
+        // Отправляем пустые данные для поддержания соединения
+        setInterval(() => {
+          if (peer && !peer.destroyed) {
+            try {
+              peer.send('ping');
+            } catch (e) {
+              console.error('Ошибка отправки ping:', e);
+            }
+          }
+        }, 5000);
       });
 
       peer.on('close', () => {
@@ -118,8 +142,11 @@ class VideoApi {
             console.log(`Состояние полученного видеотрека от ${playerId}:`, {
               enabled: videoTrack.enabled,
               readyState: videoTrack.readyState,
-              muted: videoTrack.muted
+              muted: videoTrack.muted,
+              settings: videoTrack.getSettings()
             });
+          } else {
+            console.warn(`Поток от ${playerId} не содержит видеотреков`);
           }
           
           this.onRemoteStream(playerId, stream);
@@ -127,11 +154,12 @@ class VideoApi {
       });
 
       peer.on('signal', (signal) => {
-        console.log(`Отправка сигнала к ${playerId}`);
+        console.log(`Сигнал для отправки к ${playerId}`);
         socketApi.emit('signal', { to: playerId, signal });
       });
 
       if (!initiator && initialSignal) {
+        console.log(`Применение начального сигнала для ${playerId}`);
         peer.signal(initialSignal);
       }
 
@@ -145,10 +173,22 @@ class VideoApi {
 
   // Обработка ошибок пира
   handlePeerError(playerId, error) {
+    console.error(`Ошибка пира для ${playerId}:`, error);
+    
     if (this.peers[playerId]) {
+      // Уничтожаем пир с ошибкой и создаем новый
       this.peers[playerId].destroy();
       delete this.peers[playerId];
+      
+      // Пробуем пересоздать соединение после небольшой задержки
+      setTimeout(() => {
+        if (!this.peers[playerId]) {
+          console.log(`Пересоздание соединения с ${playerId} после ошибки`);
+          this.createPeer(playerId, true);
+        }
+      }, 2000);
     }
+    
     this.connectedPlayers.delete(playerId);
     
     if (this.onRemoteStreamRemoved) {
@@ -158,12 +198,270 @@ class VideoApi {
 
   // Обработка закрытия пира
   handlePeerClose(playerId) {
-    delete this.peers[playerId];
+    console.log(`Соединение закрыто с ${playerId}`);
+    
+    if (this.peers[playerId]) {
+      this.peers[playerId].destroy();
+      delete this.peers[playerId];
+    }
+    
     this.connectedPlayers.delete(playerId);
     
     if (this.onRemoteStreamRemoved) {
       this.onRemoteStreamRemoved(playerId);
     }
+    
+    // Пробуем пересоздать соединение после небольшой задержки
+    setTimeout(() => {
+      if (!this.peers[playerId]) {
+        console.log(`Пересоздание соединения с ${playerId} после закрытия`);
+        this.createPeer(playerId, true);
+      }
+    }, 2000);
+  }
+
+  // Настройка слушателей сокетов и WebRTC соединений
+  setupSocketListeners(roomId, onRemoteStream, onRemoteStreamRemoved) {
+    if (this.signalListenersSet) {
+      console.log('Слушатели сигналов уже установлены');
+      return;
+    }
+    
+    this.onRemoteStream = onRemoteStream;
+    this.onRemoteStreamRemoved = onRemoteStreamRemoved;
+    this.roomId = roomId;
+    this.myPlayerId = socketApi.getSocketId();
+    
+    console.log(`Настройка слушателей сокетов для комнаты ${roomId}, мой ID: ${this.myPlayerId}`);
+    
+    // Отписываемся от предыдущих слушателей
+    socketApi.off('signal');
+    socketApi.off('player-joined');
+    socketApi.off('player-left');
+    socketApi.off('all-players');
+    
+    // Обработка входящих сигналов WebRTC
+    socketApi.on('signal', ({ from, signal }) => {
+      console.log(`Получен сигнал от ${from}`);
+      
+      if (from === this.myPlayerId) {
+        console.warn('Игнорируем сигнал от самого себя');
+        return;
+      }
+      
+      // Если пир не существует, создаем его
+      if (!this.peers[from]) {
+        console.log(`Создаем новый peer для ${from} на основе полученного сигнала`);
+        this.createPeer(from, false, signal);
+      } else {
+        // Иначе применяем сигнал к существующему пиру
+        console.log(`Применяем сигнал к существующему peer для ${from}`);
+        this.peers[from].signal(signal);
+      }
+    });
+    
+    // Обработка нового игрока
+    socketApi.on('player-joined', (playerId) => {
+      console.log('Новый игрок присоединился:', playerId);
+      
+      if (playerId !== this.myPlayerId && !this.peers[playerId]) {
+        console.log(`Создаем соединение с новым игроком ${playerId}`);
+        // Используем setTimeout чтобы дать время серверу обработать присоединение
+        setTimeout(() => {
+          this.createPeer(playerId, true);
+        }, 1000);
+      }
+    });
+    
+    // Получаем список всех игроков в комнате и создаем соединения
+    socketApi.on('all-players', (players) => {
+      console.log('Получен список игроков в комнате:', players);
+      
+      // Устанавливаем таймаут для постепенного создания соединений
+      players.forEach((playerId, index) => {
+        if (playerId !== this.myPlayerId && !this.peers[playerId]) {
+          // Создаем соединения с задержкой, чтобы не перегрузить систему
+          setTimeout(() => {
+            console.log(`Создаем соединение с игроком ${playerId} из списка`);
+            this.createPeer(playerId, true);
+          }, 500 * index); // Добавляем задержку для каждого следующего игрока
+        }
+      });
+    });
+    
+    // Обработка выхода игрока
+    socketApi.on('player-left', (playerId) => {
+      console.log('Игрок вышел:', playerId);
+      
+      if (this.peers[playerId]) {
+        console.log(`Удаляем соединение с игроком ${playerId}`);
+        this.peers[playerId].destroy();
+        delete this.peers[playerId];
+        
+        if (this.onRemoteStreamRemoved) {
+          this.onRemoteStreamRemoved(playerId);
+        }
+      }
+      
+      this.connectedPlayers.delete(playerId);
+    });
+    
+    this.signalListenersSet = true;
+  }
+
+  // Включение/выключение видео
+  toggleVideo(enabled) {
+    if (this.localStream) {
+      const videoTracks = this.localStream.getVideoTracks();
+      videoTracks.forEach(track => {
+        track.enabled = enabled;
+        console.log(`Видео ${enabled ? 'включено' : 'выключено'}`);
+      });
+      
+      // Обновляем потоки в существующих соединениях
+      this.updateMediaTracksInAllPeers();
+      
+      return enabled;
+    }
+    return false;
+  }
+
+  // Включение/выключение аудио
+  toggleAudio(enabled) {
+    if (this.localStream) {
+      const audioTracks = this.localStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = enabled;
+        console.log(`Аудио ${enabled ? 'включено' : 'выключено'}`);
+      });
+      
+      // Обновляем потоки в существующих соединениях
+      this.updateMediaTracksInAllPeers();
+      
+      return enabled;
+    }
+    return false;
+  }
+  
+  // Обновление медиатреков во всех соединениях
+  updateMediaTracksInAllPeers() {
+    if (!this.localStream) return;
+    
+    Object.entries(this.peers).forEach(([playerId, peer]) => {
+      if (peer && !peer.destroyed) {
+        try {
+          console.log(`Обновление медиатреков для ${playerId}`);
+          
+          // Добавляем или заменяем треки в соединении
+          this.localStream.getTracks().forEach(track => {
+            try {
+              const sender = peer._senders.find(s => s.track && s.track.kind === track.kind);
+              if (sender) {
+                console.log(`Заменяем ${track.kind} трек для ${playerId}`);
+                sender.replaceTrack(track).catch(err => {
+                  console.error(`Ошибка при замене трека: ${err.message}`);
+                });
+              } else {
+                console.log(`Добавляем ${track.kind} трек для ${playerId}`);
+                peer.addTrack(track, this.localStream);
+              }
+            } catch (error) {
+              console.error(`Ошибка при обновлении трека ${track.kind}:`, error);
+            }
+          });
+        } catch (error) {
+          console.error(`Ошибка при обновлении треков для ${playerId}:`, error);
+        }
+      }
+    });
+  }
+
+  isVideoEnabled() {
+    if (!this.localStream) return false;
+    const videoTrack = this.localStream.getVideoTracks()[0];
+    return videoTrack && videoTrack.enabled;
+  }
+
+  isAudioEnabled() {
+    if (!this.localStream) return false;
+    const audioTrack = this.localStream.getAudioTracks()[0];
+    return audioTrack && audioTrack.enabled;
+  }
+
+  // Остановка всех соединений и освобождение ресурсов
+  stop() {
+    console.log('Остановка видео API');
+    
+    // Останавливаем все анимации холста
+    this.animationFrames.forEach(id => cancelAnimationFrame(id));
+    this.animationFrames = [];
+    
+    // Закрываем все WebRTC соединения
+    Object.values(this.peers).forEach(peer => {
+      try {
+        if (peer && !peer.destroyed) {
+          peer.destroy();
+        }
+      } catch (error) {
+        console.error('Ошибка при удалении пира:', error);
+      }
+    });
+    this.peers = {};
+    
+    // Останавливаем все треки локального потока
+    if (this.localStream) {
+      try {
+        this.localStream.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch (error) {
+            console.error('Ошибка при остановке трека:', error);
+          }
+        });
+        this.localStream = null;
+      } catch (error) {
+        console.error('Ошибка при остановке локального потока:', error);
+      }
+    }
+    
+    // Останавливаем все потоки канваса
+    Object.values(this.canvasStreams).forEach(stream => {
+      try {
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      } catch (error) {
+        console.error('Ошибка при остановке потока канваса:', error);
+      }
+    });
+    this.canvasStreams = {};
+    
+    // Отписываемся от всех событий сокетов
+    socketApi.off('signal');
+    socketApi.off('player-joined');
+    socketApi.off('player-left');
+    socketApi.off('all-players');
+    
+    this.connectedPlayers.clear();
+    this.myPlayerId = null;
+    this.roomId = null;
+    this.initialized = false;
+    this.signalListenersSet = false;
+    
+    console.log('Видео API остановлен');
+  }
+
+  // Получение информации о потоке
+  getStreamInfo(stream) {
+    if (!stream) return 'Поток отсутствует';
+    
+    return {
+      videoTracks: stream.getVideoTracks().length,
+      audioTracks: stream.getAudioTracks().length,
+      videoEnabled: stream.getVideoTracks().some(track => track.enabled),
+      audioEnabled: stream.getAudioTracks().some(track => track.enabled),
+      isCanvasStream: !!stream.isCanvasStream
+    };
   }
 
   // Создание потока из канваса
@@ -215,178 +513,15 @@ class VideoApi {
     return stream;
   }
 
-  // Настройка слушателей сокетов и WebRTC соединений
-  setupSocketListeners(roomId) {
-    // Отписываемся от предыдущих слушателей
-    socketApi.off('signal');
-    socketApi.off('player-joined');
-    socketApi.off('player-left');
-    socketApi.off('all-players');
-    
-    // Отправляем запрос на присоединение к комнате
-    socketApi.emit('join-room', { roomId });
-    
-    // Получаем список всех игроков в комнате и создаем соединения
-    socketApi.on('all-players', (players) => {
-      console.log('Получен список игроков в комнате:', players);
-      players.forEach(playerId => {
-        if (playerId !== this.myPlayerId && !this.connectedPlayers.has(playerId)) {
-          console.log(`Создаем соединение с игроком ${playerId}`);
-          this.createPeer(playerId, true);
-        }
-      });
-    });
-    
-    // Обработка нового игрока
-    socketApi.on('player-joined', (playerId) => {
-      console.log('Новый игрок присоединился:', playerId);
-      if (playerId !== this.myPlayerId && !this.connectedPlayers.has(playerId)) {
-        console.log(`Создаем соединение с новым игроком ${playerId}`);
-        this.createPeer(playerId, false);
-      }
-    });
-    
-    // Обработка выхода игрока
-    socketApi.on('player-left', (playerId) => {
-      console.log('Игрок вышел:', playerId);
-      this.connectedPlayers.delete(playerId);
-      
-      // Закрываем соединение
-      if (this.peers[playerId]) {
-        this.peers[playerId].destroy();
-        delete this.peers[playerId];
-      }
-      
-      // Уведомляем об удалении потока
-      if (this.onRemoteStreamRemoved) {
-        this.onRemoteStreamRemoved(playerId);
-      }
-    });
-    
-    // Обработка WebRTC сигналов
-    socketApi.on('signal', ({ from, signal }) => {
-      console.log('Получен сигнал от:', from);
-      
-      // Если у нас уже есть соединение с этим игроком
-      if (this.peers[from]) {
-        if (this.peers[from].connected) {
-          try {
-            console.log(`Обработка сигнала для существующего соединения с ${from}`);
-            this.peers[from].signal(signal);
-          } catch (err) {
-            console.error('Ошибка при обработке сигнала:', err);
-            // Пересоздаем пир при ошибке
-            this.handlePeerError(from, err);
-            this.createPeer(from, false, signal);
-          }
-        } else {
-          console.warn('Соединение с', from, 'не установлено или закрыто. Создаём новое соединение.');
-          this.createPeer(from, false, signal);
-        }
-      } else {
-        console.warn('Соединение с', from, 'не найдено. Создаём новое соединение.');
-        this.createPeer(from, false, signal);
-      }
-    });
-  }
-  
-  // Отключение видео
-  toggleVideo(enabled) {
-    if (this.localStream) {
-      const videoTracks = this.localStream.getVideoTracks();
-      if (videoTracks.length > 0) {
-        videoTracks.forEach(track => {
-          track.enabled = enabled;
-        });
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Отключение звука
-  toggleAudio(enabled) {
-    if (this.localStream) {
-      const audioTracks = this.localStream.getAudioTracks();
-      if (audioTracks.length > 0) {
-        audioTracks.forEach(track => {
-          track.enabled = enabled;
-        });
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Проверка статуса камеры
-  isVideoEnabled() {
-    return this.localStream && this.localStream.getVideoTracks().length > 0;
-  }
-
-  // Проверка статуса микрофона
-  isAudioEnabled() {
-    return this.localStream && this.localStream.getAudioTracks().length > 0;
-  }
-
-  // Остановка всех соединений
-  stop() {
-    // Останавливаем локальный поток
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-      this.localStream = null;
-    }
-    
-    // Закрываем все WebRTC соединения
-    Object.values(this.peers).forEach(peer => {
-      if (peer && typeof peer.destroy === 'function') {
-        peer.destroy();
-      }
-    });
-    this.peers = {};
-    
-    // Очищаем все подписки
-    socketApi.off('signal');
-    socketApi.off('player-joined');
-    socketApi.off('player-left');
-    socketApi.off('all-players');
-    
-    // Остановка всех анимаций
-    this.animationFrames.forEach(id => {
-      cancelAnimationFrame(id);
-    });
-    this.animationFrames = [];
-    
-    // Удаление canvas элементов
-    const canvasElements = document.querySelectorAll('canvas[id^="canvas-"]');
-    canvasElements.forEach(canvas => {
-      canvas.remove();
-    });
-    
-    // Очищаем сохраненные потоки
-    this.canvasStreams = {};
-    
-    // Сбрасываем состояние
-    this.initialized = false;
-    this.connectedPlayers.clear();
-    this.roomId = null;
-  }
-  
-  // Получение информации о потоке
-  getStreamInfo(stream) {
-    if (!stream) return null;
-    
-    return {
-      isCanvas: stream.isCanvasStream || false,
-      canvasId: stream.canvasId || null,
-      videoTracks: stream.getVideoTracks().length,
-      audioTracks: stream.getAudioTracks().length
-    };
-  }
-
-  // Инициализация API
-  async init(roomId) {
+  // Инициализация видео API
+  async init(roomId, onRemoteStream, onRemoteStreamRemoved) {
     console.log('Инициализация Video API с WebRTC для комнаты:', roomId);
     this.roomId = roomId;
+    this.onRemoteStream = onRemoteStream;
+    this.onRemoteStreamRemoved = onRemoteStreamRemoved;
+    
+    // Устанавливаем слушатели сокетов
+    this.setupSocketListeners(roomId, onRemoteStream, onRemoteStreamRemoved);
     
     // Сначала освобождаем предыдущие ресурсы
     if (this.localStream) {
@@ -401,23 +536,35 @@ class VideoApi {
       try {
         console.log(`Попытка ${retryCount + 1}/${maxRetries} получить видеопоток с камеры...`);
         
-        // Запрашиваем только видео, если аудио не нужен
+        // Запрашиваем видео и аудио
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 640 },
             height: { ideal: 480 },
             frameRate: { ideal: 30 }
           },
-          audio: false // Отключаем аудио, так как оно не используется
+          audio: true // Включаем аудио для полноценного WebRTC
         });
         
         console.log('Медиапоток получен успешно: видео треков:', stream.getVideoTracks().length, 
                     ', аудио треков:', stream.getAudioTracks().length);
         
         const videoTrack = stream.getVideoTracks()[0];
-        console.log('Параметры видеотрека:', videoTrack.getSettings());
+        if (videoTrack) {
+          console.log('Параметры видеотрека:', videoTrack.getSettings());
+          
+          // Проверяем, что видеотрек активен
+          if (!videoTrack.enabled) {
+            videoTrack.enabled = true;
+          }
+        }
         
         this.localStream = stream;
+        
+        // Создаем соединения с другими игроками
+        this.myPlayerId = socketApi.getSocketId();
+        console.log('Мой ID игрока:', this.myPlayerId);
+        
         break;
       } catch (error) {
         console.error(`Попытка ${retryCount + 1}/${maxRetries} не удалась:`, error);
@@ -431,13 +578,49 @@ class VideoApi {
         
         console.error('Не удалось получить видеопоток с камеры:', error);
         console.log('Создаем поток из канваса вместо камеры');
-        this.localStream = await this.createCanvasStream();
+        
+        try {
+          this.localStream = await this.createCanvasStream();
+          console.log('Создан резервный поток из канваса:', this.getStreamInfo(this.localStream));
+        } catch (canvasError) {
+          console.error('Не удалось создать даже резервный поток:', canvasError);
+          // Создаем пустые треки для сохранения соединения
+          const emptyAudioTrack = this.createEmptyAudioTrack();
+          const emptyVideoTrack = this.createEmptyVideoTrack();
+          this.localStream = new MediaStream([emptyAudioTrack, emptyVideoTrack]);
+          console.log('Создан пустой медиапоток');
+        }
         break;
       }
     }
 
     this.initialized = true;
     return this.localStream;
+  }
+  
+  // Создание пустого аудио трека
+  createEmptyAudioTrack() {
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const dst = oscillator.connect(ctx.createMediaStreamDestination());
+    oscillator.start();
+    const track = dst.stream.getAudioTracks()[0];
+    track.enabled = false;
+    return track;
+  }
+  
+  // Создание пустого видео трека
+  createEmptyVideoTrack() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const stream = canvas.captureStream(5);
+    const track = stream.getVideoTracks()[0];
+    return track;
   }
 }
 

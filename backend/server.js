@@ -231,47 +231,70 @@ io.on('connection', (socket) => {
     socket.emit('room-updated', rooms[roomCode]);
   });
   
-  // Передача сигналов WebRTC между игроками
+  // Обработка WebRTC сигналов
   socket.on('signal', ({ to, signal }) => {
-    console.log(`Передача сигнала от ${socket.id} к ${to}`);
-    io.to(to).emit('signal', { from: socket.id, signal });
+    console.log(`Сигнал от ${socket.id} к ${to}`);
+    if (!to) {
+      console.error('signal: поле to не указано');
+      return;
+    }
+    
+    if (!signal) {
+      console.error('signal: поле signal не указано');
+      return;
+    }
+    
+    // Отправляем сигнал целевому игроку
+    const targetSocket = io.sockets.sockets.get(to);
+    if (targetSocket) {
+      targetSocket.emit('signal', { from: socket.id, signal });
+    } else {
+      console.error(`Целевой сокет ${to} не найден для передачи сигнала`);
+      // Сообщаем отправителю, что получатель недоступен
+      socket.emit('signal-error', { to, error: 'Целевой игрок не найден' });
+    }
   });
   
   // Обработка отключения игрока
   socket.on('disconnect', () => {
-    console.log('Игрок отключился:', socket.id);
+    console.log(`Игрок ${socket.id} отключился`);
     
-    // Находим все комнаты, где есть этот игрок
-    for (const roomCode in rooms) {
-      const room = rooms[roomCode];
-      const playerIndex = room.players.findIndex(p => p.id === socket.id);
-      
-      // Если игрок найден в комнате
-      if (playerIndex !== -1) {
-        const wasHost = room.players[playerIndex].isHost;
+    // Находим все комнаты, в которых состоит игрок
+    const playerRooms = [...socket.rooms].filter(room => room !== socket.id);
+    
+    // Для каждой комнаты обрабатываем выход игрока
+    playerRooms.forEach(roomId => {
+      if (rooms[roomId]) {
+        const room = rooms[roomId];
         
         // Удаляем игрока из комнаты
-        room.players.splice(playerIndex, 1);
-        
-        // Уведомляем всех оставшихся игроков
-        io.to(roomCode).emit('player-left', socket.id);
-        
-        // Если в комнате не осталось игроков, удаляем ее
-        if (room.players.length === 0) {
-          delete rooms[roomCode];
-          console.log(`Комната ${roomCode} удалена, т.к. в ней не осталось игроков`);
-          continue;
+        const playerIndex = room.players.findIndex(p => p.id === socket.id);
+        if (playerIndex !== -1) {
+          const removedPlayer = room.players.splice(playerIndex, 1)[0];
+          console.log(`Игрок ${removedPlayer.name} (${socket.id}) покинул комнату ${roomId}`);
+          
+          // Уведомляем всех в комнате
+          io.to(roomId).emit('player-left', socket.id);
+          
+          // Если комната пуста, удаляем её
+          if (room.players.length === 0) {
+            console.log(`Комната ${roomId} удалена, так как в ней не осталось игроков`);
+            delete rooms[roomId];
+          } else {
+            // Если был хост, выбираем нового хоста
+            if (removedPlayer.isHost) {
+              const newHost = room.players[0];
+              newHost.isHost = true;
+              console.log(`Новый хост для комнаты ${roomId}: ${newHost.name} (${newHost.id})`);
+              io.to(roomId).emit('host-changed', { hostId: newHost.id });
+            }
+            
+            // Обновляем состояние комнаты
+            io.to(roomId).emit('room-updated', room);
+          }
         }
-        
-        // Если вышел хост, назначаем нового хоста
-        if (wasHost && room.players.length > 0) {
-          room.players[0].isHost = true;
-        }
-        
-        // Обновляем состояние комнаты для всех оставшихся игроков
-        io.to(roomCode).emit('room-updated', room);
       }
-    }
+    });
   });
 });
 

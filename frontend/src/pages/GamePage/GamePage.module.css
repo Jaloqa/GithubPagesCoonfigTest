@@ -1,71 +1,81 @@
 .gamePage {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  background-color: #1a1625;
-  color: #fff;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+  padding: 2rem;
+  color: white;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 2rem;
   padding: 1rem;
-  background-color: #2a2438;
-  border-bottom: 1px solid #3a3348;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .roomInfo {
   display: flex;
-  gap: 1rem;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .roomInfo span {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #fdbb2d;
   padding: 0.5rem 1rem;
-  background-color: #3a3348;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
 }
 
 .leaveButton {
-  padding: 0.5rem 1rem;
-  background-color: #ff4444;
+  padding: 0.8rem 1.5rem;
+  background: #f44336;
   color: white;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .leaveButton:hover {
-  background-color: #ff6666;
+  background: #d32f2f;
+  transform: translateY(-2px);
 }
 
 .error {
-  padding: 1rem;
-  margin: 1rem;
-  background-color: #ff4444;
-  color: white;
-  border-radius: 0.5rem;
+  color: #ff6b6b;
+  margin-top: 1rem;
   text-align: center;
+  font-size: 0.9rem;
+  padding: 1rem;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
 }
 
 .loading {
-  padding: 1rem;
-  margin: 1rem;
-  background-color: #3a3348;
-  color: white;
-  border-radius: 0.5rem;
+  color: #fff;
+  margin-top: 1rem;
   text-align: center;
+  font-size: 0.9rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
 }
 
 .gameArea {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 1rem;
-  gap: 1rem;
+  gap: 2rem;
+  margin-top: 2rem;
 }
 
 .players {
@@ -99,8 +109,7 @@
 .videoGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
-  padding: 1rem;
+  gap: 1.5rem;
 }
 
 .controls {
@@ -127,20 +136,30 @@
 }
 
 .notes {
-  padding: 1rem;
-  background-color: #2a2438;
-  border-radius: 0.5rem;
+  margin-top: 1.5rem;
 }
 
-.notes textarea {
+.notes h3 {
+  color: #fdbb2d;
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.notesArea {
   width: 100%;
   min-height: 100px;
-  padding: 0.5rem;
-  background-color: #3a3348;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
   color: white;
-  border: 1px solid #4a4358;
-  border-radius: 0.5rem;
+  font-size: 1rem;
   resize: vertical;
+}
+
+.notesArea:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .characterEdit {
@@ -179,19 +198,18 @@
 }
 
 @media (max-width: 768px) {
+  .gamePage {
+    padding: 1rem;
+  }
+
   .header {
     flex-direction: column;
     gap: 1rem;
+    text-align: center;
   }
 
   .roomInfo {
-    flex-direction: column;
     width: 100%;
-  }
-
-  .roomInfo span {
-    width: 100%;
-    text-align: center;
   }
 
   .leaveButton {
@@ -200,6 +218,10 @@
 
   .videoGrid {
     grid-template-columns: 1fr;
+  }
+
+  .gameSidebar {
+    margin-top: 1rem;
   }
 }
 
@@ -387,13 +409,17 @@
 }
 
 .videoBox {
-  background-color: #2d2640;
-  border-radius: 10px;
-  padding: 15px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-  width: 100%;
-  max-width: 350px;
-  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.videoBox:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .playerVideoContainer {
@@ -518,9 +544,8 @@
 .videoControls {
   display: flex;
   justify-content: center;
-  gap: 15px;
-  margin-top: 10px;
-  margin-bottom: 10px;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
 .videoOn, .videoOff, .audioOn, .audioOff {
@@ -533,25 +558,27 @@
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
 }
 
 .videoOn, .audioOn {
-  background-color: #9333ea;
+  background: #4CAF50;
   color: white;
 }
 
 .videoOff, .audioOff {
-  background-color: #dc3545;
+  background: #f44336;
   color: white;
 }
 
 .videoOn:hover, .audioOn:hover {
-  background-color: #7e2cc5;
+  background: #45a049;
+  transform: translateY(-2px);
 }
 
 .videoOff:hover, .audioOff:hover {
-  background-color: #bb2d3b;
+  background: #d32f2f;
+  transform: translateY(-2px);
 }
 
 /* Адаптивность для мобильных устройств */
@@ -774,66 +801,76 @@
 
 .formButtons {
   display: flex;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 1rem;
 }
 
 .formButtons button {
-  padding: 5px 10px;
-  border-radius: 4px;
-  border: none;
-  font-size: 14px;
-  cursor: pointer;
   flex: 1;
+  padding: 0.8rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .formButtons button:first-child {
-  background-color: #9333ea;
+  background: #4CAF50;
   color: white;
 }
 
 .formButtons button:first-child:hover {
-  background-color: #7e2cc5;
+  background: #45a049;
+  transform: translateY(-2px);
 }
 
 .formButtons button:last-child {
-  background-color: #3c3252;
+  background: #f44336;
   color: white;
 }
 
 .formButtons button:last-child:hover {
-  background-color: #4b3f67;
+  background: #d32f2f;
+  transform: translateY(-2px);
 }
 
 .assignButton {
-  background-color: #9333ea;
+  width: 100%;
+  padding: 0.8rem;
+  background: #2196F3;
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
-  margin-top: 10px;
-  width: 100%;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .assignButton:hover {
-  background-color: #7e2cc5;
+  background: #1976D2;
+  transform: translateY(-2px);
 }
 
 .characterForm input {
   width: 100%;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #4b3f67;
-  background-color: #2d2640;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
   color: white;
-  font-size: 14px;
+  font-size: 1rem;
+  margin-bottom: 1rem;
 }
 
 .characterForm input:focus {
   outline: none;
-  border-color: #9333ea;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .videoStatus {
@@ -867,4 +904,44 @@
 
 .streamIcon {
   margin-right: 4px;
+}
+
+.gameSidebar {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.gameInfo {
+  margin-bottom: 1.5rem;
+}
+
+.gameInfo h3 {
+  color: #fdbb2d;
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.hintQuestions {
+  margin-bottom: 1.5rem;
+}
+
+.hintQuestions h3 {
+  color: #fdbb2d;
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.hintQuestions ul {
+  list-style: none;
+  padding: 0;
+}
+
+.hintQuestions li {
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
 } 

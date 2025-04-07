@@ -1,168 +1,138 @@
 import React, { useEffect, useRef, useState } from 'react';
-import styles from './GamePage.module.css';
-import videoApi from '../../shared/api/videoApi';
+import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash } from 'react-icons/fa';
+import './PlayerVideo.css';
 
-const PlayerVideo = ({ 
-  stream, 
-  playerId, 
-  playerName, 
-  character, 
-  isCurrentPlayer, 
-  isVideoEnabled = true, 
-  isAudioEnabled = true, 
-  muted 
-}) => {
+const PlayerVideo = ({ stream, isCurrentPlayer, playerName, character, isAudioEnabled = true }) => {
   const videoRef = useRef(null);
-  const [hasVideo, setHasVideo] = useState(false);
-  const [videoError, setVideoError] = useState(null);
-  const [videoStatus, setVideoStatus] = useState('connecting'); // 'connecting', 'active', 'error'
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    console.log('PlayerVideo: Обновление потока для', playerId, stream ? `Видеотреков: ${stream.getVideoTracks().length}, Аудиотреков: ${stream.getAudioTracks().length}` : 'нет потока');
-    
-    if (!stream || !videoRef.current) {
-      console.log('Нет потока для игрока', playerId, 'или ссылки на видеоэлемент');
-      return;
-    }
+    if (!videoRef.current) return;
 
-    const videoElement = videoRef.current;
-    const videoTrack = stream.getVideoTracks()[0];
-    
-    if (videoTrack) {
-      console.log('Видеотрек для', playerId, ':', {
-        enabled: videoTrack.enabled,
-        active: videoTrack.active,
-        type: videoTrack.kind,
-        readyState: videoTrack.readyState,
-        muted: videoTrack.muted
-      });
-    }
-
-    // Очищаем предыдущий источник видео
-    if (videoElement.srcObject) {
-      console.log('Очищаем предыдущий источник видео для', playerId);
-      videoElement.srcObject = null;
-    }
-
-    // Устанавливаем новый поток
-    videoElement.srcObject = stream;
-    
-    // Настраиваем обработчики событий
-    const handlePlay = () => {
-      console.log('Видео успешно запущено для', playerId);
-    };
-
-    const handleError = (error) => {
-      console.error('Ошибка воспроизведения видео:', error);
-      // Пробуем перезапустить воспроизведение
-      setTimeout(() => {
-        if (videoElement.paused) {
-          console.log('Пробуем перезапустить воспроизведение для', playerId);
-          videoElement.play().catch(err => {
-            console.error('Ошибка при перезапуске воспроизведения:', err);
-          });
-        }
-      }, 1000);
-    };
+    const video = videoRef.current;
+    let mounted = true;
 
     const handleLoadedMetadata = () => {
-      console.log('Метаданные видео загружены для', playerId);
-      // Пробуем запустить воспроизведение
-      videoElement.play().catch(err => {
-        console.error('Ошибка при запуске воспроизведения:', err);
+      if (!mounted) return;
+      console.log('Video metadata loaded:', {
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: video.duration
       });
+      setStatus('ready');
     };
 
-    videoElement.addEventListener('play', handlePlay);
-    videoElement.addEventListener('error', handleError);
-    videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+    const handleError = (e) => {
+      if (!mounted) return;
+      console.error('Video error:', e);
+      setError('Ошибка загрузки видео');
+      setStatus('error');
+    };
 
-    // Очистка при размонтировании
-    return () => {
-      console.log('Очистка компонента PlayerVideo для', playerId);
-      videoElement.removeEventListener('play', handlePlay);
-      videoElement.removeEventListener('error', handleError);
-      videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      
-      if (videoElement.srcObject) {
-        videoElement.srcObject.getTracks().forEach(track => track.stop());
-        videoElement.srcObject = null;
+    const handlePlay = () => {
+      if (!mounted) return;
+      console.log('Video started playing');
+      setStatus('playing');
+    };
+
+    const handlePause = () => {
+      if (!mounted) return;
+      console.log('Video paused');
+      setStatus('paused');
+    };
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('error', handleError);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+
+    if (stream) {
+      try {
+        video.srcObject = stream;
+        console.log('Stream assigned to video element:', {
+          videoTracks: stream.getVideoTracks().length,
+          audioTracks: stream.getAudioTracks().length
+        });
+      } catch (err) {
+        console.error('Error setting video stream:', err);
+        setError('Ошибка установки потока видео');
+        setStatus('error');
       }
+    } else {
+      setStatus('no-stream');
+    }
+
+    return () => {
+      mounted = false;
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('error', handleError);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.srcObject = null;
     };
-  }, [stream, playerId]);
+  }, [stream]);
 
-  // Обработчик ошибок воспроизведения видео
-  const handleVideoError = (error) => {
-    console.error(`Ошибка воспроизведения видео для ${playerId}:`, error);
-    setVideoError(error.message || 'Ошибка воспроизведения видео');
-    setHasVideo(false);
-    setVideoStatus('error');
+  const renderStatus = () => {
+    switch (status) {
+      case 'loading':
+        return <div className="video-loading">Загрузка...</div>;
+      case 'error':
+        return <div className="video-error">{error || 'Ошибка видео'}</div>;
+      case 'no-stream':
+        return (
+          <div className="video-offline">
+            <FaVideoSlash size={24} />
+            <span>Видео недоступно</span>
+          </div>
+        );
+      case 'paused':
+        return (
+          <div className="video-waiting" onClick={() => videoRef.current?.play()}>
+            <FaVideo size={24} />
+            <span>Нажмите для воспроизведения</span>
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
-  // Обработчик успешной загрузки видео
-  const handleVideoPlay = () => {
-    console.log(`Видео успешно запущено для ${playerId}`);
-    setVideoStatus('active');
-    setHasVideo(true);
+  const getInitials = (name) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
-
-  // Определяем, показывать ли видео
-  const showVideo = stream && 
-    (hasVideo || stream.getVideoTracks().length > 0 || stream.isCanvasStream);
 
   return (
-    <div className={styles.playerVideoContainer}>
-      {stream ? (
-        <div className={styles.videoWrapper}>
+    <div className={`player-video-container ${isCurrentPlayer ? 'current-player' : ''}`}>
+      <div className="video-wrapper">
+        {stream ? (
           <video
             ref={videoRef}
-            className={styles.playerVideo}
+            className="player-video"
             autoPlay
             playsInline
-            muted={muted}
-            onError={handleVideoError}
-            onPlay={handleVideoPlay}
+            muted={isCurrentPlayer}
           />
-          <div className={`${styles.videoStatus} ${styles[`videoStatus${videoStatus.charAt(0).toUpperCase() + videoStatus.slice(1)}`]}`}>
-            <span className={styles.streamIcon}>
-              {videoStatus === 'connecting' && '⌛'}
-              {videoStatus === 'active' && '✓'}
-              {videoStatus === 'error' && '✗'}
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className={styles.placeholderVideo}>
-          <div className={styles.placeholderContent}>
-            <span role="img" aria-label="user">👤</span>
-            <div className={styles.noVideoText}>
-              {videoError ? 'Ошибка видео' : 'Подключение...'}
-            </div>
-            <div className={styles.spinnerContainer}>
-              <div className={styles.spinner}></div>
+        ) : (
+          <div className="video-placeholder">
+            <div className="avatar-placeholder">
+              {getInitials(playerName)}
             </div>
           </div>
-        </div>
-      )}
-      {!isVideoEnabled && stream && (
-        <div className={styles.videoDisabled}>
-          <span className={styles.noVideoIcon}>🎥</span>
-        </div>
-      )}
-      <div className={styles.playerInfo}>
-        <div className={styles.playerName}>
-          {playerName || `Игрок ${playerId?.substring(0, 4) || 'неизвестный'}`} {isCurrentPlayer && ' (Вы)'}
-        </div>
-        {character && (
-          <div className={styles.playerCharacter}>
-            Персонаж: {isCurrentPlayer ? '???' : character}
-          </div>
         )}
-        {!isAudioEnabled && (
-          <div className={styles.mediaControls}>
-            <span className={styles.mutedIcon}>🔇</span>
-          </div>
-        )}
+        {renderStatus()}
+      </div>
+      <div className="player-info">
+        <div className="player-name">{playerName}</div>
+        {character && <div className="player-character">{character}</div>}
+        <div className="audio-status">
+          {!isAudioEnabled && <FaMicrophoneSlash className="muted-icon" />}
+        </div>
       </div>
     </div>
   );
