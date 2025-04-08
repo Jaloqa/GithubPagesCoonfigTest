@@ -12,6 +12,7 @@
 
 .player-video-container.current-player {
   border: 2px solid #4CAF50;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
 }
 
 .video-wrapper {
@@ -19,6 +20,7 @@
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
 }
 
 .player-video {
@@ -26,6 +28,7 @@
   height: 100%;
   object-fit: cover;
   background: rgba(0, 0, 0, 0.2);
+  transform: scaleX(-1); /* Зеркальное отображение для локального видео */
 }
 
 .player-info {
@@ -41,6 +44,11 @@
   align-items: center;
   z-index: 2;
   backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.player-info:hover {
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .player-name {
@@ -58,6 +66,7 @@
   border-radius: 8px;
   font-size: 0.9rem;
   margin-left: 0.5rem;
+  white-space: nowrap;
 }
 
 .audio-status {
@@ -69,6 +78,7 @@
 .muted-icon {
   font-size: 1.2rem;
   color: #f44336;
+  animation: pulse 1.5s infinite;
 }
 
 /* Стили для индикаторов статуса */
@@ -88,6 +98,11 @@
   font-size: 1rem;
   z-index: 3;
   backdrop-filter: blur(5px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
 }
 
 .video-error {
@@ -97,6 +112,12 @@
 .video-waiting {
   cursor: pointer;
   background: rgba(33, 150, 243, 0.8);
+  transition: all 0.3s ease;
+}
+
+.video-waiting:hover {
+  background: rgba(33, 150, 243, 0.9);
+  transform: translate(-50%, -50%) scale(1.05);
 }
 
 .video-placeholder {
@@ -123,18 +144,22 @@
   font-size: 2.5rem;
   font-weight: bold;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  animation: pulse 2s infinite;
 }
 
-/* Анимация загрузки */
+/* Анимации */
 @keyframes pulse {
   0% {
     opacity: 0.6;
+    transform: scale(1);
   }
   50% {
     opacity: 1;
+    transform: scale(1.05);
   }
   100% {
     opacity: 0.6;
+    transform: scale(1);
   }
 }
 
@@ -142,6 +167,7 @@
   animation: pulse 1.5s infinite ease-in-out;
 }
 
+/* Адаптивность */
 @media (max-width: 768px) {
   .player-video-container {
     aspect-ratio: 4/3;
@@ -160,5 +186,14 @@
     width: 80px;
     height: 80px;
     font-size: 2rem;
+  }
+
+  .video-loading,
+  .video-error,
+  .video-offline,
+  .video-disabled,
+  .video-waiting {
+    font-size: 0.9rem;
+    padding: 0.8rem;
   }
 } 

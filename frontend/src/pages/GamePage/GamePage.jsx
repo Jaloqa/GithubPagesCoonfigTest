@@ -4,6 +4,7 @@ import styles from './GamePage.module.css';
 import socketApi from '@/shared/api/socketApi';
 import videoApi from '@/shared/api/videoApi';
 import PlayerVideo from './PlayerVideo';
+import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash } from 'react-icons/fa';
 
 export const GamePage = () => {
   const location = useLocation();
@@ -19,6 +20,11 @@ export const GamePage = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const localVideoRef = useRef(null);
   const [remoteStreams, setRemoteStreams] = useState({});
+  const [localStream, setLocalStream] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
   const [gameState, setGameState] = useState({
     roomCode: '',
@@ -214,176 +220,75 @@ export const GamePage = () => {
 
   // Эффект для инициализации видео
   useEffect(() => {
-    let mounted = true;
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    // Функция для инициализации видео с повторами при ошибке
-    const initVideoWithRetry = async () => {
-      if (!mounted) return;
-      
-      if (retryCount >= maxRetries) {
-        console.error('Превышено максимальное количество попыток подключения видео');
-        setError('Не удалось инициализировать видео после нескольких попыток');
-        return;
-      }
-      
+    const initVideo = async () => {
       try {
-        console.log(`Инициализация видео для комнаты ${gameState.roomCode}, попытка ${retryCount + 1}/${maxRetries}`);
+        setLoading(true);
+        setError(null);
+
+        // Проверяем доступность медиаустройств
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasVideoDevices = devices.some(device => device.kind === 'videoinput');
+        const hasAudioDevices = devices.some(device => device.kind === 'audioinput');
+
+        if (!hasVideoDevices && !hasAudioDevices) {
+          throw new Error('Не найдены доступные медиаустройства');
+        }
+
+        // Запрашиваем разрешение на доступ к медиаустройствам
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: hasVideoDevices,
+          audio: hasAudioDevices
+        });
+
+        // Проверяем наличие треков
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
+
+        if (videoTracks.length === 0 && audioTracks.length === 0) {
+          throw new Error('Не удалось получить доступ к медиаустройствам');
+        }
+
+        setLocalStream(stream);
+        setLoading(false);
+
+        // Обработка отключения треков
+        videoTracks.forEach(track => {
+          track.onended = () => {
+            console.log('Video track ended');
+            setVideoEnabled(false);
+          };
+        });
+
+        audioTracks.forEach(track => {
+          track.onended = () => {
+            console.log('Audio track ended');
+            setAudioEnabled(false);
+          };
+        });
+
+      } catch (err) {
+        console.error('Error initializing video:', err);
+        setError(err.message);
         
-        if (!socketApi.isConnected()) {
-          console.warn('Сокет не подключен, ожидаем подключения перед инициализацией видео');
-          setError('Ожидание подключения к серверу...');
+        if (retryCount < maxRetries) {
           setTimeout(() => {
-            if (mounted) {
-              retryCount++;
-              initVideoWithRetry();
-            }
+            setRetryCount(prev => prev + 1);
+            initVideo();
           }, 2000);
-          return;
-        }
-        
-        // Обработчик получения удаленного потока
-        const handleRemoteStream = (playerId, stream) => {
-          console.log(`Получен удаленный поток от игрока ${playerId}`);
-          
-          if (!mounted) {
-            console.log(`Компонент размонтирован, игнорируем поток от ${playerId}`);
-            return;
-          }
-          
-          // Логируем информацию о потоке
-          const videoTrack = stream.getVideoTracks()[0];
-          if (videoTrack) {
-            console.log(`Видеотрек от ${playerId}:`, {
-              enabled: videoTrack.enabled,
-              readyState: videoTrack.readyState,
-              muted: videoTrack.muted,
-              settings: videoTrack.getSettings()
-            });
-          }
-          
-          setRemoteStreams(prev => {
-            // Создаем копию предыдущего состояния
-            const newStreams = { ...prev };
-            // Добавляем новый поток
-            newStreams[playerId] = stream;
-            return newStreams;
-          });
-        };
-        
-        // Обработчик удаления удаленного потока
-        const handleRemoteStreamRemoved = (playerId) => {
-          console.log(`Удален удаленный поток игрока ${playerId}`);
-          
-          if (!mounted) {
-            console.log(`Компонент размонтирован, игнорируем удаление потока от ${playerId}`);
-            return;
-          }
-          
-          setRemoteStreams(prev => {
-            // Создаем копию без удаленного потока
-            const newStreams = { ...prev };
-            delete newStreams[playerId];
-            return newStreams;
-          });
-        };
-        
-        // Инициализируем видео API
-        const stream = await videoApi.init(gameState.roomCode, handleRemoteStream, handleRemoteStreamRemoved);
-        
-        if (!mounted) {
-          // Если компонент был размонтирован во время инициализации
-          console.log('Компонент размонтирован во время инициализации видео');
-          videoApi.stop();
-          return;
-        }
-        
-        if (!stream) {
-          console.error('Не удалось получить локальный поток');
-          setError('Не удалось получить доступ к камере');
-          
-          // Пробуем еще раз
-          if (retryCount < maxRetries - 1) {
-            retryCount++;
-            setTimeout(() => {
-              if (mounted) {
-                initVideoWithRetry();
-              }
-            }, 2000);
-            return;
-          }
-        }
-        
-        // Логируем информацию о полученном потоке
-        console.log('Локальный видеопоток получен:', videoApi.getStreamInfo(stream));
-        
-        // Устанавливаем локальный поток в видео элемент
-        if (localVideoRef.current) {
-          try {
-            localVideoRef.current.srcObject = stream;
-            console.log('Локальный поток установлен в видеоэлемент');
-          } catch (err) {
-            console.error('Ошибка при установке локального потока:', err);
-            setError(`Ошибка при отображении локального видео: ${err.message}`);
-          }
         } else {
-          console.warn('localVideoRef.current не определен');
-        }
-        
-        // Сохраняем ID сокета для идентификации локального игрока
-        const socketId = socketApi.getSocketId();
-        if (socketId) {
-          console.log('ID сокета получен:', socketId);
-          setGameState(prev => ({
-            ...prev,
-            playerId: socketId
-          }));
-        } else {
-          console.warn('Не удалось получить ID сокета');
-        }
-        
-        // Обновляем статус видео и аудио на основе реального состояния
-        const videoIsEnabled = videoApi.isVideoEnabled();
-        const audioIsEnabled = videoApi.isAudioEnabled();
-        console.log(`Статус видео: ${videoIsEnabled}, статус аудио: ${audioIsEnabled}`);
-        setVideoEnabled(videoIsEnabled);
-        setAudioEnabled(audioIsEnabled);
-        
-        // Запрашиваем список всех игроков в комнате для соединения
-        socketApi.emit('get-players', { roomCode: gameState.roomCode });
-        
-      } catch (error) {
-        console.error('Ошибка при инициализации видео:', error);
-        
-        if (mounted) {
-          setError(`Ошибка видео: ${error.message || 'Неизвестная ошибка'}`);
-          retryCount++;
-          console.log(`Повторная попытка через 2 секунды (${retryCount}/${maxRetries})...`);
-          setTimeout(() => {
-            if (mounted) {
-              initVideoWithRetry();
-            }
-          }, 2000);
+          setLoading(false);
         }
       }
     };
 
-    if (gameState.roomCode && socketApi.isConnected()) {
-      console.log('Начинаем инициализацию видео');
-      initVideoWithRetry();
-    } else {
-      console.log('Пропускаем инициализацию видео: комната', gameState.roomCode, 'сокет подключен:', socketApi.isConnected());
-    }
+    initVideo();
 
     return () => {
-      mounted = false;
-      console.log('Размонтирование компонента GamePage, останавливаем видео API');
-      if (videoApi) {
-        videoApi.stop();
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [gameState.roomCode, gameState.gameStarted]);
+  }, [retryCount]);
 
   // Эффект для обработки изменения состояния игры
   useEffect(() => {
@@ -422,15 +327,23 @@ export const GamePage = () => {
 
   // Обработчики для включения/отключения видео и аудио
   const toggleVideo = () => {
-    const newState = !videoEnabled;
-    videoApi.toggleVideo(newState);
-    setVideoEnabled(newState);
+    if (localStream) {
+      const videoTracks = localStream.getVideoTracks();
+      videoTracks.forEach(track => {
+        track.enabled = !videoEnabled;
+      });
+      setVideoEnabled(!videoEnabled);
+    }
   };
 
   const toggleAudio = () => {
-    const newState = !audioEnabled;
-    videoApi.toggleAudio(newState);
-    setAudioEnabled(newState);
+    if (localStream) {
+      const audioTracks = localStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = !audioEnabled;
+      });
+      setAudioEnabled(!audioEnabled);
+    }
   };
 
   // Выход из игры
@@ -494,7 +407,7 @@ export const GamePage = () => {
             {/* Локальный игрок */}
             <div className={`${styles.videoBox} ${styles.localVideo}`}>
               <PlayerVideo
-                stream={localVideoRef.current?.srcObject}
+                stream={localStream}
                 playerName={gameState.playerName}
                 character={gameState.characters[gameState.playerId]}
                 isCurrentPlayer={true}
